@@ -1,0 +1,10 @@
+username,password,identity,area
+admin,123,总部综管员,
+nmanager,123,片区长,北片区
+cmanager,123,片区长,中片区
+emanager,123,片区长,东片区
+smanager,123,片区长,西南片区
+nstaff,123,片区综管员,北片区
+cstaff,123,片区综管员,中片区
+estaff,123,片区综管员,东片区
+sstaff,123,片区综管员,西南片区

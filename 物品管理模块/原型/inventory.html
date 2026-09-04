@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>库存管理系统</title>
+    <link rel="stylesheet" href="inventory.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="system-container">
+        <!-- 左侧导航栏 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>库存管理系统</h2>
+            </div>
+            <div class="user-info-sidebar">
+                <span id="userDisplayNameSidebar">用户</span>
+                <button id="logoutBtn" class="action-btn logout-btn">退出登录</button>
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="#" class="nav-item active" data-target="inventory-module">
+                            <i class="nav-icon">📋</i>
+                            <span>库存清单</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-target="purchase-module">
+                            <i class="nav-icon">📦</i>
+                            <span>产品出入库明细</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-target="item-management-module">
+                            <i class="nav-icon">🛠️</i>
+                            <span>物品管理</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        
+        <!-- 主内容区域 -->
+        <div class="main-content">
+            <!-- 库存清单模块 -->
+            <div id="inventory-module" class="module">
+                <div class="module-header">
+                    <h1>库存清单</h1>
+                </div>
+                
+                <!-- 搜索和采购申请区域 -->
+                <div class="search-add-section">
+                    <div class="search-bar">
+                        <label for="productTypeInput" style="display: none;">产品类型</label>
+                        <input type="text" id="productTypeInput" placeholder="输入产品类型">
+                        <label for="productNameInput" style="display: none;">产品名称</label>
+                        <input type="text" id="productNameInput" placeholder="输入产品名称">
+                        <button id="searchBtn" class="action-btn search-btn">搜索</button>
+                        <button id="resetBtn" class="action-btn reset-btn">重置</button>
+                    </div>
+                    <div class="search-bar" style="margin-top: 10px;">
+                        <label for="historyStartDate" style="display: none;">开始日期</label>
+                        <input type="date" id="historyStartDate" placeholder="开始日期">
+                        <label for="historyEndDate" style="display: none;">结束日期</label>
+                        <input type="date" id="historyEndDate" placeholder="结束日期">
+                        <button id="historySearchBtn" class="action-btn search-btn">查询历史库存</button>
+                        <button id="resetHistoryBtn" class="action-btn reset-btn">重置时间</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="purchaseApplyBtn" class="action-btn add-btn">采购申请</button>
+                        <div style="position: relative; display: inline-block;">
+                            <button id="approvalManageBtn" class="action-btn approval-btn">审批管理</button>
+                            <span id="approvalBadge" class="approval-badge" style="display: none;"></span>
+                        </div>
+                        <button id="inStockBtn" class="action-btn add-btn">入库管理</button>
+                        <button id="exportInventoryBtn" class="action-btn search-btn">导出库存</button>
+                        <button id="exportPurchaseBtn" class="action-btn search-btn">导出采购申请</button>
+                    </div>
+                </div>
+                
+                <!-- 片区筛选区域 -->
+                <div class="area-filter-section">
+                    <h3>片区筛选</h3>
+                    <div class="area-buttons">
+                        <button class="area-btn" onclick="filterByArea('all')">全部片区</button>
+                        <button class="area-btn" onclick="filterByArea('northFirst')">北一片区</button>
+                        <button class="area-btn" onclick="filterByArea('north')">北二片区</button>
+                        <button class="area-btn" onclick="filterByArea('central')">东片区</button>
+                        <button class="area-btn" onclick="filterByArea('east')">中片区</button>
+                        <button class="area-btn" onclick="filterByArea('southwest')">西南片区</button>
+                        <button class="area-btn" onclick="filterByArea('yiFeng')">益丰</button>
+                    </div>
+                </div>
+                
+                <!-- 库存表格 -->
+                <div class="inventory-table-container">
+                    <table class="inventory-table">
+                        <thead id="inventoryTableHead">
+                            <tr>
+                                <th><input type="checkbox" id="selectAllInventory"></th>
+                                <th>产品编号</th>
+                                <th>产品名称</th>
+                                <th>产品类别</th>
+                                <th>产品规格</th>
+                                <th>总库存</th>
+                                <th>北一片区库存</th>
+                                <th>北二片区库存</th>
+                                <th>东片区库存</th>
+                                <th>中片区库存</th>
+                                <th>西南片区库存</th>
+                                <th>益丰库存</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- 表格内容将通过JavaScript动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- 产品出入库管理模块 -->
+            <div id="purchase-module" class="module">
+                <div class="module-header">
+                    <h1>产品出入库明细</h1>
+                </div>
+                
+                <!-- 出入库记录搜索区域 -->
+                <div class="search-add-section">
+                    <div class="search-bar">
+                        <label for="startDate" style="display: none;">开始时间</label>
+                        <input type="date" id="startDate" placeholder="开始时间">
+                        <label for="endDate" style="display: none;">结束时间</label>
+                        <input type="date" id="endDate" placeholder="结束时间">
+                        <label for="areaFilter" style="display: none;">片区</label>
+                        <select id="areaFilter" placeholder="片区">
+                            <option value="all">全部片区</option>
+                            <option value="northFirst">北一片区</option>
+                            <option value="north">北二片区</option>
+                            <option value="central">东片区</option>
+                            <option value="east">中片区</option>
+                            <option value="southwest">西南片区</option>
+                            <option value="yiFeng">益丰</option>
+                        </select>
+                        <button id="searchPurchaseBtn" class="action-btn search-btn">搜索</button>
+                        <button id="resetPurchaseBtn" class="action-btn reset-btn">重置</button>
+                        <button id="exportStockHistoryBtn" class="action-btn add-btn">导出</button>
+                    </div>
+                    <div class="area-filter-section">
+                        <h3>记录类型筛选</h3>
+                        <div class="area-buttons">
+                            <button id="allRecordsBtn" class="area-btn active" onclick="filterByRecordType('all')">全部记录</button>
+                            <button id="purchaseRecordsBtn" class="area-btn" onclick="filterByRecordType('purchase')">采购记录</button>
+                            <button id="outRecordsBtn" class="area-btn" onclick="filterByRecordType('out')">出库记录</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 出入库记录表格 -->
+                <div class="inventory-table-container">
+                    <table class="inventory-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllStockHistory"></th>
+                                <th>片区</th>
+                                <th>操作类型</th>
+                                <th>申请时间</th>
+                                <th>操作人</th>
+                                <th>领用人</th>
+                                <th>产品名称</th>
+                                <th>产品规格</th>
+                                <th>北一片区数量</th>
+                                <th>北二片区数量</th>
+                                <th>东片区数量</th>
+                                <th>中片区数量</th>
+                                <th>西南片区数量</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchaseHistoryTableBody">
+                            <!-- 表格内容将通过JavaScript动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+        </div>
+        
+        <!-- 物品管理模块 -->
+        <div id="item-management-module" class="module">
+            <div class="module-header">
+                <h1>物品管理</h1>
+            </div>
+            
+            <!-- 搜索和添加物品区域 -->
+            <div class="search-add-section">
+                <div class="search-bar">
+                    <label for="itemIdInput" style="display: none;">物品编号</label>
+                    <input type="text" id="itemIdInput" placeholder="输入物品编号">
+                    <label for="itemNameInput" style="display: none;">物品名称</label>
+                    <input type="text" id="itemNameInput" placeholder="输入物品名称">
+                    <label for="itemBrandInput" style="display: none;">品牌</label>
+                    <input type="text" id="itemBrandInput" placeholder="输入品牌">
+                    <label for="itemModelInput" style="display: none;">型号规格</label>
+                    <input type="text" id="itemModelInput" placeholder="输入型号规格">
+                    <button id="searchItemBtn" class="action-btn search-btn">搜索</button>
+                    <button id="resetItemBtn" class="action-btn reset-btn">重置</button>
+                </div>
+                <div class="action-buttons">
+                    <button id="addItemBtn" class="action-btn add-btn">添加物品</button>
+                    <button class="action-btn search-btn" onclick="exportItemManagementData()">导出数据</button>
+                    <label for="importFile" style="display: none;">导入数据</label>
+                    <input type="file" id="importFile" accept=".xlsx,.xls" style="display: none;" onchange="importItemManagementData(event)">
+                    <button class="action-btn reset-btn" onclick="document.getElementById('importFile').click()">导入数据</button>
+                </div>
+            </div>
+            
+            <!-- 物品表格 -->
+            <div class="inventory-table-container">
+                <table class="inventory-table">
+                <thead>
+                    <tr>
+                        <th>物品编号</th>
+                        <th>物品名称</th>
+                        <th>品牌</th>
+                        <th>型号规格</th>
+                        <th>单位</th>
+                        <th>类别</th>
+                        <th>备注</th>
+                        <th>预警设置</th>
+                    <th>操作</th>
+                    </tr>
+                </thead>
+                    <tbody id="itemTableBody">
+                        <!-- 表格内容将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 采购申请模态框 -->
+    <div id="purchaseApplyModal" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="modal-header">
+                <h2>产品采购申请</h2>
+                <span class="close" id="closePurchaseApplyModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="purchaseApplyForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>申请人</label>
+                            <div id="applyOperator" class="form-display-text"></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="applyDate">申请时间</label>
+                            <input type="datetime-local" id="applyDate" required>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 15px 0; display: flex; gap: 10px;">
+                        <button type="button" id="addExistingProductBtn" class="btn btn-submit">添加现有产品</button>
+                        <button type="button" id="downloadTemplateBtn" class="btn btn-submit">下载模板</button>
+                        <label for="importTemplateFile" style="display: none;">导入模板</label>
+                        <input type="file" id="importTemplateFile" accept=".xlsx,.xls" style="display: none;" onchange="importTemplateData(event)">
+                        <button type="button" id="importTemplateBtn" class="btn btn-submit">导入模板</button>
+                    </div>
+                    
+                    <!-- 多产品采购申请表格 -->
+                    <h3>采购产品清单</h3>
+                    <div class="product-list-container">
+                        <table class="product-list-table">
+                            <thead>
+                                <tr>
+                                    <th>产品名称</th>
+                                    <th>产品类型</th>
+                                    <th>产品规格</th>
+                                    <th>单价</th>
+                                    <th>北一片区数量</th>
+                                    <th>北二片区数量</th>
+                                    <th>东片区数量</th>
+                                    <th>中片区数量</th>
+                                    <th>西南片区数量</th>
+                                    <th>益丰数量</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productListBody">
+                                <!-- 产品行将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" id="cancelPurchaseApply" class="btn btn-cancel">取消</button>
+                        <button type="submit" class="btn btn-submit">确认申请</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 现有产品选择弹窗 -->
+    <div id="selectExistingProductModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>选择现有产品</h2>
+                <span class="close" id="closeSelectExistingProductModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="existingProductInput">选择或输入产品</label>
+                    <div style="position: relative; display: flex;">
+                        <input type="text" id="existingProductInput" placeholder="输入产品名称、类型、型号或编号，或从列表中选择" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-right: none; border-radius: 4px 0 0 4px; font-size: 14px;">
+                        <button type="button" id="showAllProductsBtn" style="padding: 8px 12px; border: 1px solid #ddd; border-left: none; border-radius: 0 4px 4px 0; background-color: #f8f9fa; cursor: pointer;">
+                            ▼
+                        </button>
+                        <div id="existingProductDropdown" style="position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-top: none; background-color: white; border-radius: 0 0 4px 4px; z-index: 1000; display: none;">
+                            <!-- 下拉选项将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                    <input type="hidden" id="selectedProductIndex" value="">
+                </div>
+                <div class="form-row" style="margin-top: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="existingProductPrice">单价</label>
+                        <input type="number" id="existingProductPrice" step="0.01" min="0" placeholder="输入单价">
+                    </div>
+                </div>
+                <div class="form-row" style="margin-top: 15px;">
+                    <div class="form-group" style="flex: 1; margin-right: 10px;">
+                        <label for="existingTotalStock">北一片区</label>
+                        <input type="number" id="existingTotalStock" min="0" value="0" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-right: 10px;">
+                        <label for="existingNorthStock">北二片区</label>
+                        <input type="number" id="existingNorthStock" min="0" value="0" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-right: 10px;">
+                        <label for="existingCentralStock">东片区</label>
+                        <input type="number" id="existingCentralStock" min="0" value="0" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-right: 10px;">
+                        <label for="existingEastStock">中片区</label>
+                        <input type="number" id="existingEastStock" min="0" value="0" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="existingSouthwestStock">西南片区</label>
+                        <input type="number" id="existingSouthwestStock" min="0" value="0" required>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" id="cancelSelectExistingProduct" class="btn btn-cancel">取消</button>
+                    <button type="button" id="confirmSelectExistingProduct" class="btn btn-submit">确认添加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 采购申请确认弹窗 -->
+    <div id="applyConfirmModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>确认采购申请</h2>
+                <span class="close" id="closeApplyConfirmModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="applyConfirmContent">
+                    <!-- 确认内容将通过JavaScript动态生成 -->
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" id="cancelApplyConfirm" class="btn btn-cancel">取消</button>
+                    <button type="button" id="confirmApply" class="btn btn-submit">确认提交</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 出库模态框 -->
+    <div id="outStockModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>产品出库</h2>
+                <span class="close" id="closeOutStockModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="outStockForm">
+                    <input type="hidden" id="outProductIndex">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="outProductName">产品名称</label>
+                            <input type="text" id="outProductName" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="outProductType">产品类型</label>
+                            <input type="text" id="outProductType" readonly>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="outProductSpec">产品规格</label>
+                            <input type="text" id="outProductSpec" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="outOperator">出库人</label>
+                            <input type="text" id="outOperator" placeholder="输入出库人姓名" required readonly>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="outDate">出库时间</label>
+                            <input type="datetime-local" id="outDate" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="outArea">出库片区</label>
+                            <select id="outArea" required>
+                                <option value="">请选择出库片区</option>
+                                <option value="北二片区">北二片区</option>
+                                <option value="东片区">东片区</option>
+                                <option value="中片区">中片区</option>
+                                <option value="西南片区">西南片区</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <h3>领用人信息</h3>
+                    <div style="margin: 10px 0;">
+                        <button type="button" onclick="addRecipient()" class="btn btn-submit">添加领用人</button>
+                    </div>
+                    <div id="outRecipientsList">
+                        <!-- 领用人列表将通过JavaScript动态生成 -->
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" id="cancelOutStock" class="btn btn-cancel">取消</button>
+                        <button type="submit" class="btn btn-submit">确认出库</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 详情模态框 -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content detail-modal-content">
+            <div class="modal-header">
+                <h2>产品详情</h2>
+                <span class="close" id="closeDetailModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="productDetail" class="product-detail"></div>
+                <div class="history-section">
+                    <h3>出入库记录</h3>
+                    <div class="history-table-container">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                <th>操作类型</th>
+                                <th>操作时间</th>
+                                <th>操作人</th>
+                                <th>单价</th>
+                                <th>北二片区</th>
+                                <th>东片区</th>
+                                <th>中片区</th>
+                                <th>西南片区</th>
+                                <th>备注</th>
+                                <th>操作</th>
+                            </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <!-- 出入库记录将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 采购详情模态框 -->
+    <div id="purchaseDetailModal" class="modal">
+        <div class="modal-content detail-modal-content">
+            <div class="modal-header">
+                <h2>采购详情</h2>
+                <span class="close" id="closePurchaseDetailModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="purchaseDetailContent"></div>
+                
+
+                
+                <!-- 采购资料上传和查看 -->
+                <div class="purchase-documents" style="margin-top: 20px;">
+                    <h3>采购资料</h3>
+                    <div id="documentsList"></div>
+                    <div style="margin-top: 15px;">
+                        <label for="documentUpload" style="display: none;">上传资料</label>
+                        <input type="file" id="documentUpload" multiple style="margin-right: 10px;">
+                        <button type="button" id="uploadDocumentBtn" class="btn btn-submit">上传资料</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    
+    <!-- 上传资料模态框 -->
+    <div id="uploadDocumentsModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>上传采购资料</h2>
+                <span class="close" id="closeUploadDocumentsModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="uploadDocumentInfo" class="product-detail-info"></div>
+                <div class="purchase-documents" style="margin-top: 20px;">
+                    <h3>已上传资料</h3>
+                    <div id="uploadDocumentsList"></div>
+                    <div style="margin-top: 15px;">
+                        <input type="file" id="uploadDocumentFile" multiple style="margin-right: 10px;">
+                        <button type="button" id="uploadDocumentSubmit" class="btn btn-submit">上传资料</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 审批管理模态框 -->
+    <div id="approvalManageModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>审批管理</h2>
+                <span class="close" id="closeApprovalManageModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <h3>待审批采购申请</h3>
+                <div id="approvalList" class="approval-list">
+                    <!-- 审批列表将通过JavaScript动态生成 -->
+                </div>
+            </div>
+        </div>
+</div>
+
+<!-- 入库管理模态框 -->
+<div id="inStockModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h2>入库管理</h2>
+            <span class="close" id="closeInStockModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <h3>待入库采购申请</h3>
+            <div id="inStockList" class="approval-list">
+                <!-- 待入库列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 导出采购申请模态框 -->
+<div id="exportPurchaseModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2>导出采购申请</h2>
+            <span class="close" id="closeExportPurchaseModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="exportPurchaseForm">
+                <div class="form-group">
+                    <label for="purchaseStartDate">申请开始日期:</label>
+                    <input type="date" id="purchaseStartDate">
+                </div>
+                <div class="form-group">
+                    <label for="purchaseEndDate">申请结束日期:</label>
+                    <input type="date" id="purchaseEndDate">
+                </div>
+                <div class="form-group">
+                    <label for="purchaseAreaFilter">片区筛选:</label>
+                    <select id="purchaseAreaFilter">
+                        <option value="all">全部片区</option>
+                        <option value="北一片区">北一片区</option>
+                        <option value="北二片区">北二片区</option>
+                        <option value="东片区">东片区</option>
+                        <option value="中片区">中片区</option>
+                        <option value="西南片区">西南片区</option>
+                        <option value="益丰">益丰</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="purchaseStatusFilter">状态筛选:</label>
+                    <select id="purchaseStatusFilter">
+                        <option value="all">全部状态</option>
+                        <option value="pending">待审批</option>
+                        <option value="area_manager_approved">片区长已批准</option>
+                        <option value="headquarters_approved">总部已批准（待入库）</option>
+                        <option value="completed">已完成</option>
+                        <option value="area_manager_rejected">片区长已拒绝</option>
+                        <option value="headquarters_rejected">总部已拒绝</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-submit">导出</button>
+                    <button type="button" id="cancelExportPurchase" class="btn btn-cancel">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 库存转移模态框 -->
+<div id="transferStockModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2>库存转移</h2>
+            <span class="close" id="closeTransferStockModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="transferStockForm">
+                <div class="form-group">
+                    <label>产品名称</label>
+                    <input type="text" id="transferProductName" readonly>
+                </div>
+                <div class="form-group">
+                    <label>产品规格</label>
+                    <input type="text" id="transferProductSpec" readonly>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>源片区</label>
+                        <select id="transferSourceArea" required>
+                            <option value="">请选择源片区</option>
+                            <option value="northFirst">北一片区</option>
+                            <option value="north">北二片区</option>
+                            <option value="east">东片区</option>
+                            <option value="central">中片区</option>
+                            <option value="southwest">西南片区</option>
+                            <option value="yiFeng">益丰</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>源片区库存</label>
+                        <input type="text" id="transferSourceStock" readonly>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>目标片区</label>
+                        <select id="transferTargetArea" required>
+                            <option value="">请选择目标片区</option>
+                            <option value="northFirst">北一片区</option>
+                            <option value="north">北二片区</option>
+                            <option value="east">东片区</option>
+                            <option value="central">中片区</option>
+                            <option value="southwest">西南片区</option>
+                            <option value="yiFeng">益丰</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>目标片区库存</label>
+                        <input type="text" id="transferTargetStock" readonly>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>转移数量</label>
+                    <input type="number" id="transferQuantity" min="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>备注（可选）</label>
+                    <input type="text" id="transferRemark" placeholder="输入转移原因等信息">
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit" class="btn btn-submit">确认转移</button>
+                    <button type="button" id="cancelTransferStock" class="btn btn-cancel">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 添加物品模态框 -->
+<div id="addItemModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>添加物品</h2>
+            <span class="close" id="closeAddItemModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="addItemForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="addItemId">物品编号</label>
+                        <input type="text" id="addItemId" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addItemName">物品名称</label>
+                        <input type="text" id="addItemName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addItemBrand">品牌</label>
+                        <input type="text" id="addItemBrand" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="addItemModel">型号规格</label>
+                        <input type="text" id="addItemModel" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addItemUnit">单位</label>
+                        <input type="text" id="addItemUnit" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="addItemCategory">类别</label>
+                        <select id="addItemCategory" required>
+                            <option value="">请选择类别</option>
+                            <option value="固定资产">固定资产</option>
+                            <option value="消耗品">消耗品</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="addItemRemark">备注</label>
+                        <input type="text" id="addItemRemark">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    <h3>预警设置（可选）</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="addWarningThreshold">预警阈值（百分比 0-100）</label>
+                            <input type="number" id="addWarningThreshold" min="0" max="100" step="0.1" placeholder="不设置则不预警">
+                        </div>
+                        <div class="form-group">
+                            <label for="addWarningFixed">固定预警值（优先）</label>
+                            <input type="number" id="addWarningFixed" min="0" step="1" placeholder="不设置则使用百分比">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" id="cancelAddItem" class="btn btn-cancel">取消</button>
+                    <button type="submit" class="btn btn-submit">确认添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 预警提示模态框 -->
+<div id="warningAlertModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header" style="background-color: #f8d7da; color: #721c24;">
+            <h2>⚠️ 库存预警提醒</h2>
+            <span class="close" id="closeWarningAlertModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom: 15px;">以下产品库存已低于预警值，请及时处理：</p>
+            <div id="warningAlertContent" style="max-height: 300px; overflow-y: auto;"></div>
+            <button type="button" id="acknowledgeWarningBtn" class="btn btn-submit" style="margin-top: 20px; width: 100%;">我知道了</button>
+        </div>
+    </div>
+</div>
+
+<!-- 物品预警设置模态框 -->
+<div id="itemWarningSettingModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2>预警设置</h2>
+            <span class="close" id="closeItemWarningSettingModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="itemWarningSettingForm">
+                <input type="hidden" id="itemWarningIndex">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>物品名称</label>
+                        <input type="text" id="itemWarningName" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>型号规格</label>
+                        <input type="text" id="itemWarningModel" readonly>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    <h3>预警设置</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="itemWarningThreshold">预警阈值（百分比 0-100）</label>
+                            <input type="number" id="itemWarningThreshold" min="0" max="100" step="0.1" placeholder="不设置则不预警">
+                        </div>
+                        <div class="form-group">
+                            <label for="itemWarningFixed">固定预警值（优先）</label>
+                            <input type="number" id="itemWarningFixed" min="0" step="1" placeholder="不设置则使用百分比">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" id="cancelItemWarningSetting" class="btn btn-cancel">取消</button>
+                    <button type="submit" class="btn btn-submit">保存设置</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑物品模态框 -->
+<div id="editItemModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>编辑物品</h2>
+            <span class="close" id="closeEditItemModal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="editItemForm">
+                <input type="hidden" id="editItemIndex">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editItemId">物品编号</label>
+                        <input type="text" id="editItemId" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editItemName">物品名称</label>
+                        <input type="text" id="editItemName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editItemBrand">品牌</label>
+                        <input type="text" id="editItemBrand" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editItemModel">型号规格</label>
+                        <input type="text" id="editItemModel" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editItemUnit">单位</label>
+                        <input type="text" id="editItemUnit" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editItemCategory">类别</label>
+                        <select id="editItemCategory" required>
+                            <option value="">请选择类别</option>
+                            <option value="固定资产">固定资产</option>
+                            <option value="消耗品">消耗品</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editItemRemark">备注</label>
+                        <input type="text" id="editItemRemark">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    <h3>预警设置（可选）</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editWarningThreshold">预警阈值（百分比 0-100）</label>
+                            <input type="number" id="editWarningThreshold" min="0" max="100" step="0.1" placeholder="不设置则不预警">
+                        </div>
+                        <div class="form-group">
+                            <label for="editWarningFixed">固定预警值（优先）</label>
+                            <input type="number" id="editWarningFixed" min="0" step="1" placeholder="不设置则使用百分比">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" id="cancelEditItem" class="btn btn-cancel">取消</button>
+                    <button type="submit" class="btn btn-submit">确认修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="inventory.js"></script>
+</body>
+</html>

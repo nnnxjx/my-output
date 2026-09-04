@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试物品管理功能</title>
+</head>
+<body>
+    <h1>测试物品管理功能</h1>
+    <div id="testResults"></div>
+    <button onclick="testAddItem()">测试添加物品</button>
+    <button onclick="testLoadData()">测试加载数据</button>
+    <button onclick="testClearData()">清空数据</button>
+    
+    <script>
+        // 模拟物品管理数据
+        let itemManagementData = [];
+        
+        // 加载数据
+        function loadItemManagementData() {
+            try {
+                const storedItems = localStorage.getItem('itemManagementData');
+                if (storedItems) {
+                    itemManagementData = JSON.parse(storedItems);
+                    console.log('Loaded data from localStorage:', itemManagementData);
+                } else {
+                    console.log('No stored data');
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+        
+        // 保存数据
+        function saveItemManagementData() {
+            try {
+                localStorage.setItem('itemManagementData', JSON.stringify(itemManagementData));
+                console.log('Data saved successfully');
+            } catch (error) {
+                console.error('Error saving data:', error);
+            }
+        }
+        
+        // 生成物品编号
+        function generateItemId() {
+            let maxId = 0;
+            itemManagementData.forEach(item => {
+                const idMatch = item.itemId.match(/^ITEM(\d+)$/);
+                if (idMatch) {
+                    const idNum = parseInt(idMatch[1]);
+                    if (idNum > maxId) {
+                        maxId = idNum;
+                    }
+                }
+            });
+            const newIdNum = maxId + 1;
+            return 'ITEM' + String(newIdNum).padStart(3, '0');
+        }
+        
+        // 测试添加物品
+        function testAddItem() {
+            const testItem = {
+                itemId: generateItemId(),
+                itemName: '测试物品' + new Date().getTime(),
+                brand: '测试品牌',
+                itemModel: '测试型号',
+                unit: '个',
+                category: '固定资产',
+                remark: '测试备注'
+            };
+            
+            console.log('Adding test item:', testItem);
+            itemManagementData.push(testItem);
+            console.log('After push - itemManagementData length:', itemManagementData.length);
+            
+            saveItemManagementData();
+            loadItemManagementData();
+            
+            displayResults();
+        }
+        
+        // 测试加载数据
+        function testLoadData() {
+            loadItemManagementData();
+            displayResults();
+        }
+        
+        // 清空数据
+        function testClearData() {
+            localStorage.removeItem('itemManagementData');
+            itemManagementData = [];
+            displayResults();
+        }
+        
+        // 显示结果
+        function displayResults() {
+            const testResults = document.getElementById('testResults');
+            testResults.innerHTML = `
+                <h2>测试结果</h2>
+                <p>物品数量: ${itemManagementData.length}</p>
+                <h3>物品列表:</h3>
+                <pre>${JSON.stringify(itemManagementData, null, 2)}</pre>
+                <h3>本地存储数据:</h3>
+                <pre>${localStorage.getItem('itemManagementData') || '无数据'}</pre>
+            `;
+        }
+        
+        // 初始化
+        loadItemManagementData();
+        displayResults();
+    </script>
+</body>
+</html>

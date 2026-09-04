@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>采购记录管理 - 库存管理系统</title>
+    <link rel="stylesheet" href="inventory.css">
+</head>
+<body>
+    <div class="inventory-container">
+        <div class="header-section">
+            <h1 class="inventory-title">采购记录管理</h1>
+            <div class="user-info">
+                <span id="userDisplayName">用户</span>
+                <button id="logoutBtn" class="action-btn logout-btn">退出登录</button>
+            </div>
+        </div>
+        
+        <!-- 导航链接 -->
+        <div class="navigation-section">
+            <a href="inventory.html" class="nav-link">物品清单</a>
+            <a href="purchase_history.html" class="nav-link active">采购记录管理</a>
+        </div>
+        
+        <!-- 采购记录搜索区域 -->
+        <div class="search-add-section">
+            <div class="search-bar">
+                <input type="text" id="purchaseProductNameInput" placeholder="输入产品名称">
+                <input type="text" id="purchaseProductTypeInput" placeholder="输入产品类型">
+                <input type="text" id="purchaseProductSpecInput" placeholder="输入产品规格">
+                <button id="searchPurchaseBtn" class="action-btn search-btn">搜索</button>
+                <button id="resetPurchaseBtn" class="action-btn reset-btn">重置</button>
+            </div>
+        </div>
+        
+        <!-- 采购记录表格 -->
+        <div class="inventory-table-container">
+            <table class="inventory-table">
+                <thead>
+                    <tr>
+                        <th>片区</th>
+                        <th>操作类型</th>
+                        <th>申请时间</th>
+                        <th>操作人</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="purchaseHistoryTableBody">
+                    <!-- 表格内容将通过JavaScript动态生成 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 采购详情模态框 -->
+    <div id="purchaseDetailModal" class="modal">
+        <div class="modal-content detail-modal-content">
+            <div class="modal-header">
+                <h2>采购详情</h2>
+                <span class="close" id="closePurchaseDetailModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="purchaseDetailContent"></div>
+                
+                <!-- 修改产品信息和价格 -->
+                <div class="modify-product-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                    <h3>修改产品信息和价格</h3>
+                    <form id="modifyProductForm">
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1; margin-right: 10px;">
+                                <label for="modifyProductName">产品名称</label>
+                                <input type="text" id="modifyProductName" required>
+                            </div>
+                            <div class="form-group" style="flex: 1; margin-right: 10px;">
+                                <label for="modifyProductType">产品类型</label>
+                                <input type="text" id="modifyProductType" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="modifyProductSpec">产品规格</label>
+                                <input type="text" id="modifyProductSpec" required>
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top: 15px;">
+                            <div class="form-group" style="flex: 1; margin-right: 10px;">
+                                <label for="modifyProductPrice">单价</label>
+                                <input type="number" id="modifyProductPrice" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top: 15px;">
+                            <button type="submit" class="btn btn-submit">修改信息</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- 采购资料上传和查看 -->
+                <div class="purchase-documents" style="margin-top: 20px;">
+                    <h3>采购资料</h3>
+                    <div id="documentsList"></div>
+                    <div style="margin-top: 15px;">
+                        <input type="file" id="documentUpload" multiple style="margin-right: 10px;">
+                        <button type="button" id="uploadDocumentBtn" class="btn btn-submit">上传资料</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 修改确认弹窗 -->
+    <div id="modifyConfirmModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>确认修改</h2>
+                <span class="close" id="closeModifyConfirmModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="modifyConfirmContent">
+                    <!-- 确认内容将通过JavaScript动态生成 -->
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" id="cancelModifyConfirm" class="btn btn-cancel">取消</button>
+                    <button type="button" id="confirmModify" class="btn btn-submit">确认修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 上传资料模态框 -->
+    <div id="uploadDocumentsModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>上传采购资料</h2>
+                <span class="close" id="closeUploadDocumentsModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="uploadDocumentInfo" class="product-detail-info"></div>
+                <div class="purchase-documents" style="margin-top: 20px;">
+                    <h3>已上传资料</h3>
+                    <div id="uploadDocumentsList"></div>
+                    <div style="margin-top: 15px;">
+                        <input type="file" id="uploadDocumentFile" multiple style="margin-right: 10px;">
+                        <button type="button" id="uploadDocumentSubmit" class="btn btn-submit">上传资料</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="inventory.js"></script>
+</body>
+</html>

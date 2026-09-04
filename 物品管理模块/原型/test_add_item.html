@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试添加物品功能</title>
+    <style>
+        .modal {
+            display: block;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-actions {
+            margin-top: 20px;
+            text-align: right;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-submit {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn-cancel {
+            background-color: #f44336;
+            color: white;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>测试添加物品功能</h1>
+    <div id="itemTable"></div>
+    
+    <!-- 添加物品模态框 -->
+    <div id="addItemModal" class="modal">
+        <div class="modal-content">
+            <h2>添加物品</h2>
+            <form id="addItemForm">
+                <div class="form-group">
+                    <label for="addItemId">物品编号</label>
+                    <input type="text" id="addItemId" readonly placeholder="自动生成">
+                </div>
+                <div class="form-group">
+                    <label for="addItemName">物品名称 *</label>
+                    <input type="text" id="addItemName" required>
+                </div>
+                <div class="form-group">
+                    <label for="addItemBrand">品牌 *</label>
+                    <input type="text" id="addItemBrand" required>
+                </div>
+                <div class="form-group">
+                    <label for="addItemModel">型号规格 *</label>
+                    <input type="text" id="addItemModel" required>
+                </div>
+                <div class="form-group">
+                    <label for="addItemUnit">单位 *</label>
+                    <input type="text" id="addItemUnit" required>
+                </div>
+                <div class="form-group">
+                    <label for="addItemCategory">类别 *</label>
+                    <select id="addItemCategory" required>
+                        <option value="">请选择类别</option>
+                        <option value="固定资产">固定资产</option>
+                        <option value="消耗品">消耗品</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="addItemRemark">备注</label>
+                    <input type="text" id="addItemRemark">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-submit">确认添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟物品管理数据
+        let itemManagementData = [];
+        
+        // 加载数据
+        function loadItemManagementData() {
+            try {
+                const storedItems = localStorage.getItem('itemManagementData');
+                if (storedItems) {
+                    itemManagementData = JSON.parse(storedItems);
+                    console.log('Loaded data from localStorage:', itemManagementData);
+                } else {
+                    console.log('No stored data');
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+        
+        // 保存数据
+        function saveItemManagementData() {
+            try {
+                localStorage.setItem('itemManagementData', JSON.stringify(itemManagementData));
+                console.log('Data saved successfully');
+            } catch (error) {
+                console.error('Error saving data:', error);
+            }
+        }
+        
+        // 生成物品编号
+        function generateItemId() {
+            let maxId = 0;
+            itemManagementData.forEach(item => {
+                const idMatch = item.itemId.match(/^ITEM(\d+)$/);
+                if (idMatch) {
+                    const idNum = parseInt(idMatch[1]);
+                    if (idNum > maxId) {
+                        maxId = idNum;
+                    }
+                }
+            });
+            const newIdNum = maxId + 1;
+            return 'ITEM' + String(newIdNum).padStart(3, '0');
+        }
+        
+        // 渲染物品表格
+        function renderItemManagementTable() {
+            const itemTable = document.getElementById('itemTable');
+            if (!itemTable) return;
+            
+            itemTable.innerHTML = `
+                <h2>物品列表</h2>
+                <table border="1" style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <th>物品编号</th>
+                        <th>物品名称</th>
+                        <th>品牌</th>
+                        <th>型号规格</th>
+                        <th>单位</th>
+                        <th>类别</th>
+                        <th>备注</th>
+                    </tr>
+                    ${itemManagementData.map(item => `
+                        <tr>
+                            <td>${item.itemId}</td>
+                            <td>${item.itemName}</td>
+                            <td>${item.brand}</td>
+                            <td>${item.itemModel}</td>
+                            <td>${item.unit}</td>
+                            <td>${item.category}</td>
+                            <td>${item.remark || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+                <p>物品数量: ${itemManagementData.length}</p>
+            `;
+        }
+        
+        // 处理添加物品
+        function handleAddItemSubmit(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            console.log('handleAddItemSubmit called');
+            
+            const addItemName = document.getElementById('addItemName').value.trim();
+            const addItemBrand = document.getElementById('addItemBrand').value.trim();
+            const addItemModel = document.getElementById('addItemModel').value.trim();
+            const addItemUnit = document.getElementById('addItemUnit').value.trim();
+            const addItemCategory = document.getElementById('addItemCategory').value.trim();
+            const addItemRemark = document.getElementById('addItemRemark').value.trim();
+            
+            if (!addItemName || !addItemBrand || !addItemModel || !addItemUnit || !addItemCategory) {
+                alert('请填写所有必填字段！');
+                return;
+            }
+            
+            const newItem = {
+                itemId: generateItemId(),
+                itemName: addItemName,
+                brand: addItemBrand,
+                itemModel: addItemModel,
+                unit: addItemUnit,
+                category: addItemCategory,
+                remark: addItemRemark
+            };
+            
+            console.log('Adding new item:', newItem);
+            itemManagementData.push(newItem);
+            console.log('After push - length:', itemManagementData.length);
+            
+            saveItemManagementData();
+            loadItemManagementData();
+            renderItemManagementTable();
+            
+            closeModal();
+            document.getElementById('addItemForm').reset();
+            
+            alert('物品添加成功！');
+        }
+        
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('addItemModal').style.display = 'none';
+        }
+        
+        // 绑定表单提交事件
+        document.getElementById('addItemForm').addEventListener('submit', handleAddItemSubmit);
+        
+        // 初始化
+        loadItemManagementData();
+        renderItemManagementTable();
+    </script>
+</body>
+</html>

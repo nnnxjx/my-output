@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试产品类型修复</title>
+</head>
+<body>
+    <h1>测试产品类型修复</h1>
+    <div id="testResults"></div>
+    <script>
+        // 模拟测试数据
+        const testProduct = {
+            productName: "测试产品",
+            productType: "电子设备", // 从模板导入的产品类型
+            productCategory: "固定资产", // 从物品管理获取的类别
+            productSpec: "标准规格",
+            totalStock: 10,
+            northStock: 5,
+            centralStock: 2,
+            eastStock: 2,
+            southwestStock: 1,
+            averagePrice: 100
+        };
+        
+        const testResults = document.getElementById('testResults');
+        
+        // 测试修复后的逻辑
+        function getProductCategory(item) {
+            // 模拟修复后的逻辑：优先使用productType
+            return item.productType || item.productCategory || "固定资产";
+        }
+        
+        const result = getProductCategory(testProduct);
+        
+        testResults.innerHTML = `
+            <h2>测试结果</h2>
+            <h3>测试产品数据：</h3>
+            <pre>${JSON.stringify(testProduct, null, 2)}</pre>
+            <h3>修复前的行为：</h3>
+            <p>会显示：${testProduct.productCategory}</p>
+            <h3>修复后的行为：</h3>
+            <p>会显示：${result}</p>
+            <h3>结论：</h3>
+            <p style="color: ${result === testProduct.productType ? 'green' : 'red'}">
+                ${result === testProduct.productType ? '✓ 修复成功！现在会显示模板中的产品类型' : '✗ 修复失败'}
+            </p>
+        `;
+        
+        // 测试边缘情况
+        const edgeCases = [
+            {
+                name: "只有productCategory",
+                data: { productCategory: "消耗品" }
+            },
+            {
+                name: "都为空",
+                data: {}
+            },
+            {
+                name: "两者都有",
+                data: { productType: "办公用品", productCategory: "消耗品" }
+            }
+        ];
+        
+        testResults.innerHTML += '<h3>边缘情况测试：</h3>';
+        edgeCases.forEach(testCase => {
+            const result = getProductCategory(testCase.data);
+            testResults.innerHTML += `
+                <p><strong>${testCase.name}：</strong>${result}</p>
+            `;
+        });
+    </script>
+</body>
+</html>

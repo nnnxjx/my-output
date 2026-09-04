@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试模板导入</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <h1>测试模板导入功能</h1>
+    <input type="file" id="testFileInput" accept=".xlsx,.xls">
+    <div id="testResults"></div>
+    <script>
+        // 模拟用户信息
+        const mockUser = {
+            username: "test_user",
+            identity: "片区综管员",
+            area: "北片区"
+        };
+        
+        // 保存到本地存储
+        localStorage.setItem('user', JSON.stringify(mockUser));
+        
+        document.getElementById('testFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    const resultsDiv = document.getElementById('testResults');
+                    resultsDiv.innerHTML = `
+                        <h2>测试结果</h2>
+                        <p>文件名称: ${file.name}</p>
+                        <p>工作表名称: ${firstSheetName}</p>
+                        <p>数据行数: ${jsonData.length}</p>
+                        <h3>列名:</h3>
+                        <p>${Object.keys(jsonData[0] || {}).join(', ')}</p>
+                        <h3>前3行数据:</h3>
+                        <pre>${JSON.stringify(jsonData.slice(0, 3), null, 2)}</pre>
+                        <h3>用户信息:</h3>
+                        <pre>${JSON.stringify(mockUser, null, 2)}</pre>
+                    `;
+                    
+                    // 验证数据格式
+                    const validData = jsonData.filter(item => {
+                        if (!item['产品名称'] || item['单价'] === undefined) {
+                            return false;
+                        }
+                        return item['北片区数量'] !== undefined;
+                    });
+                    
+                    resultsDiv.innerHTML += `
+                        <h3>验证结果:</h3>
+                        <p>有效数据行数: ${validData.length}</p>
+                        <p>无效数据行数: ${jsonData.length - validData.length}</p>
+                    `;
+                    
+                    if (validData.length > 0) {
+                        resultsDiv.innerHTML += '<p style="color: green;">✓ 数据验证通过！</p>';
+                    } else {
+                        resultsDiv.innerHTML += '<p style="color: red;">✗ 数据验证失败！</p>';
+                    }
+                } catch (error) {
+                    document.getElementById('testResults').innerHTML = `<p style="color: red;">错误: ${error.message}</p>`;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    </script>
+</body>
+</html>
