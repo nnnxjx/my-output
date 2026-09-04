@@ -1,0 +1,125 @@
+<div class="in-page-Common in-reservoir-dailyPatrolReport">
+    <div class="topContent">
+        <span class="topContent-left go-back-btn" @click="goBack">
+            <i class="el-icon-arrow-left"></i>
+        </span>
+        <span>{{orderInfo.reservoirName}}</span>
+    </div>
+    <div class="mainContent" v-loading="loading">
+        <div class="checkPoint-group" v-for="(val, k) in checkPointsForm">
+            <div class="checkPoint-group-head">{{k}}</div>
+            <div class="checkPoint-group-body">
+                <div class="checkPoint-item" v-for="item in val">
+                    <div class="checkPoint-item-top">
+                        <div class="checkPoint-item-left">{{item.clockPointName}}</div>
+                        <div class="checkPoint-item-right">
+                            <div class="abnormal-tag" :class="{'is-abnormal': !item.abnormal}" v-if="isDetail">
+                                {{item.abnormal ? '正常' : '异常'}}
+                            </div>
+                            <el-switch v-model="item.abnormal" active-text="正常" inactive-text="异常" v-else></el-switch>  
+                            <div class="pic-btn" @click="openUploadPic(item)">
+                                <img :src="imgUrls.pic_icon" v-if="item.picList[0].imgIds.length">
+                                <img :src="imgUrls.camera_icon" v-else>
+                            </div>
+                        </div>
+                    </div>
+                    <template v-if="!item.abnormal">
+                        <div class="remark-text" v-if="isDetail">{{item.remark}}</div>
+                        <el-input type="textarea" v-model="item.remark" :rows="2" placeholder="请输入异常情况" v-else></el-input>
+                    </template>
+                </div>
+            </div>
+        </div>
+        <div v-if="!Object.keys(checkPointsForm).length" class="no-content-text">暂无巡查内容</div>
+        <div class="form-card">
+            <div class="form-card-title">外来人员</div>
+            <div class="form-row">
+                <div class="form-label">昨日外来人员数量</div>
+                <div class="form-input-row">
+                    <el-input
+                        v-model="outsidePersonNum"
+                        :disabled="isDetail"
+                        @input="outsidePersonNum = formatNaturalNumber(outsidePersonNum)"
+                        @keydown.native="blockNumberInputKeys"
+                        placeholder="请输入自然数"
+                        type="number">
+                    </el-input>
+                    <span class="unit">人</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card">
+            <div class="form-card-title construction-card-head">
+                <span>有无涉库施工</span>
+                <el-switch v-model="haveConstruction" active-text="有" inactive-text="无" v-if="!isDetail"></el-switch>
+                <div class="construction-status-wrap" v-else>
+                    <div class="construction-tag" :class="{'is-abnormal': !haveConstruction}">
+                        {{haveConstruction ? '有' : '无'}}
+                    </div>
+                </div>
+            </div>
+            <template v-if="haveConstruction">
+                <template v-if="isDetail">
+                    <div class="construction-pic-list" v-if="constructionFile[0].uploadImgs.length">
+                        <div class="construction-pic-item" v-for="(pic, idx) in constructionFile[0].uploadImgs" :key="idx">
+                            <img :src="pic.url">
+                        </div>
+                    </div>
+                    <div class="construction-no-pic" v-else>暂无图片</div>
+                </template>
+                <app-picture-video-upload
+                    v-else
+                    serviceKey="gwxj"
+                    ref="constructionFileUpload"
+                    :picList.sync="constructionFile"
+                    @uploadCallback="uploadConstructionFileCallback"
+                    @deleteCallback="uploadConstructionFileCallback">
+                </app-picture-video-upload>
+            </template>
+        </div>
+
+    </div>
+    <div class="footer">
+        <template v-if="isDetail">
+            <el-button class="in-btn" style="width: 30%;" @click="goBack">取 消</el-button> 
+            <el-button class="in-btn bg_blue" 
+                style="width: 60%;" @click="createRectifyOrder"
+                v-if="orderInfo.rectifyStatusText === '整改' &&
+                      orderInfo.hasReport">
+                生成整改工单
+            </el-button>
+            <el-button class="in-btn bg_blue" 
+                style="width: 60%;" @click="createRectifyOrder"
+                v-if="orderInfo.rectifyStatusText === '整改中' &&
+                      orderInfo.hasReport">
+                编辑整改工单
+            </el-button>
+        </template>
+        <template v-else>
+            <el-button class="in-btn" style="width: 45%;" @click="goBack">取 消</el-button> 
+            <el-button class="in-btn bg_blue" style="width: 45%;"
+                :loading="submitLoading"
+                :disabled="submitLoading"
+                @click="submit">提 交</el-button>
+        </template>
+    </div>
+
+    <!-- 上传图片弹窗 -->
+    <div class="upload-pic-dialog" v-show="isOpenUploadPic">
+        <div class="upload-pic-dialog-content">
+            <div class="upload-pic-box">
+                <app-picture-video-upload
+                    serviceKey="gwxj"
+                    ref="appPictureUpload"
+                    :picList.sync="uploadPicItem.picList"
+                    @uploadCallback="uploadPicCallback"
+                    @deleteCallback="uploadPicCallback">
+                </app-picture-video-upload>
+            </div>
+            <div class="close-btn">
+                <i class="el-icon-error" @click="closeUploadPic"></i>
+            </div>
+        </div>
+    </div>
+</div>

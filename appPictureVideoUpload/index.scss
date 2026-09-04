@@ -1,0 +1,141 @@
+.in-picUploadPanel {
+    margin-bottom: .3rem;
+    .title-cell {
+        box-sizing: border-box;
+        margin-bottom: .2rem;
+        overflow: hidden;
+        position: relative;
+        text-decoration: none;
+        color: #4B5468;
+        font-size: 14px;
+        .smallNotice {
+            font-size: 12px;
+            color: #929BAF;
+        }
+    }
+
+    $size: 1.8rem;
+    .upload-img-area {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        .image-container {
+            position: relative;
+            text-align: center;
+            margin-right: .1rem;
+            margin-bottom: .1rem;
+            border-radius: .3rem;
+            overflow: hidden;
+            img,video {
+                width: $size;
+                height: $size;
+            }
+            .upload-mask {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                left: 0;
+                top: 0;
+                cursor: default;
+                text-align: center;
+                line-height: $size;
+                color: #fff;
+                font-size: 20px;
+                background-color: rgba(0, 0, 0, .5);
+                transition: opacity .3s;
+            }
+            .top-right-del-btn {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 20px;
+                height: 20px;
+                line-height: 20px;
+                cursor: default;
+                text-align: center;
+                color: #fff;
+                font-size: 20px;
+                background-color: rgba(0, 0, 0, .5);
+                transition: opacity .3s;
+            }
+            .video-play-btn {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: .6rem;
+                height: .6rem;
+                line-height: .6rem;
+                cursor: default;
+                text-align: center;
+                color: #fff;
+                font-size: 24px;
+                // background-color: rgba(0, 0, 0, .5);
+                font-weight: bold;
+                transition: opacity .3s;
+                transform: translate(-50%, -50%);
+                border: 2px solid #fff;
+                border-radius: 100px;
+                box-shadow: 0px 4px 25px 0px rgba(0, 0, 0, 0.35);
+            }
+        }
+        .el-upload--picture-card {
+            position: relative;
+            width: $size;
+            height: $size;
+            line-height: $size;
+            margin-bottom: .1rem;
+            border: none;
+            border-radius: .3rem;
+        }
+
+        .uploadProgress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: $size;
+            height: $size;
+            padding: .16rem;
+            background-color: #fff;
+            border-radius: .3rem;
+            .el-progress-circle {
+                width: 100% !important;
+                height: 100% !important;
+            }
+        }
+
+        .additional-btn {
+            margin-top: .1rem;
+            color: #409EFF;
+            text-align: center;
+            cursor: pointer;
+        }
+    }
+
+    &.bg_gray {
+        .upload-img-area {
+            .el-upload--picture-card {
+                background-color: #F5F5F5;
+            }
+        }
+    }
+}
+
+.picUploadPanel_play-video-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, .5);
+    z-index: 999;
+
+    video {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        height: 50%;
+        width: 100%;
+        transform: translateY(-50%);
+    }
+}
+

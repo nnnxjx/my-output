@@ -1,0 +1,45 @@
+<div class="appHome">
+    <header class="homeHeader">
+        <div class="appHome-top-box">
+            <img class="appHome-top-logo" src="../../img/appHome/homeLogo.png">
+            <div class="appHome-top-title">鹭岛排水</div>
+        </div>
+        <div class="qr-icon" @click="scanQRCode()">
+            <img src="../../img/appHome/扫码.png" alt="">
+        </div>
+    </header>
+    <div class="component-box">
+        <div class="content-box1">
+            <div class="menu-box" v-for="menu in menus">
+                <div class="menu-img" v-show="!menu.showImg" @click="openMenuDetail(menu)" style="position: relative;">
+                    <div class="fg" v-if="!menu.power"></div>
+                    <div class="fg" v-else  ></div>
+                    <!-- <img :src="menu.img"> -->
+                    <i class="icon iconfont" :class="menu.icon"></i>
+                </div>
+                <div class="menu-img" v-show="menu.showImg" @click="openMenuDetail(menu)" style="position: relative;">
+                    <div class="fg" v-show="!menu.power"></div>
+                    <img :src="menu.img">
+                    <i class="icon iconfont" :class="menu.icon"></i>
+                </div>
+                <p class="menu-text">{{menu.text}}123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 巡检模块-安全交底 -->
+    <!--安全交底内容-->
+    <div class="yd-popup-mask" v-show="safetyVisible"></div>
+    <div class="popupStyle" v-show="safetyVisible" style="width: 100%;height: 70%;z-index: 1501;">
+        <div class="safetyTitle">
+            安全生产常识交底
+        </div>
+        <div class="safetyContent" v-html="workGuide">
+            <div>{{workGuide}}</div>
+        </div>
+        <div class="safetyBottom">
+            <el-checkbox :disabled="!disabBut || !isReadTime" v-model="Allread">我已全部阅读<span v-show="readTime!==0">（{{readTime}}s）</span></el-checkbox>
+            <el-button v-show="Allread" type="primary" @click="activeSignature">签名</el-button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,132 @@
+<div class="maItemManagement">
+    <div class="wrap">
+        <div class="container">
+            <div class="operation-bar static-card">
+                <div class="query-panel">
+                    <el-input v-model="queryForm.itemNo" clearable placeholder="输入物品编号" class="query-item"></el-input>
+                    <el-input v-model="queryForm.itemName" clearable placeholder="输入物品名称" class="query-item"></el-input>
+                    <el-input v-model="queryForm.brand" clearable placeholder="输入品牌" class="query-item"></el-input>
+                    <el-input v-model="queryForm.modelSpec" clearable placeholder="输入型号规格" class="query-item"></el-input>
+                    <el-button type="primary" icon="el-icon-search" @click="search">搜索</el-button>
+                    <el-button @click="resetQuery">重置</el-button>
+                </div>
+                <div class="table-btns-right">
+                    <el-button type="success" icon="el-icon-plus" @click="openAddDialog">添加物品</el-button>
+                    <el-button type="primary" icon="el-icon-download" :loading="exporting" @click="handleExport">导出数据</el-button>
+                    <el-upload
+                        action=""
+                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        :show-file-list="false"
+                        :http-request="handleImport"
+                        :before-upload="beforeImportUpload">
+                        <el-button type="info" icon="el-icon-upload2" :loading="importing">导入数据</el-button>
+                    </el-upload>
+                </div>
+            </div>
+
+            <div class="table-shell static-card">
+                <el-table v-loading="loading" :data="tableData" border stripe class="item-table" height="calc(100% - 48px)">
+                    <el-table-column prop="itemNo" label="物品编号" min-width="120"></el-table-column>
+                    <el-table-column prop="itemName" label="物品名称" min-width="140"></el-table-column>
+                    <el-table-column prop="brand" label="品牌" min-width="120"></el-table-column>
+                    <el-table-column prop="modelSpec" label="型号规格" min-width="120"></el-table-column>
+                    <el-table-column prop="unit" label="单位" width="90"></el-table-column>
+                    <el-table-column prop="category" label="类别" min-width="120"></el-table-column>
+                    <el-table-column prop="remark" label="备注" min-width="120"></el-table-column>
+                    <el-table-column prop="warningSetting" label="预警设置" min-width="120">
+                        <template slot-scope="scope">
+                            <el-button size="mini" type="primary" @click="openWarningDialog(scope.row)">预警设置</el-button>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="220" fixed="right">
+                        <template slot-scope="scope">
+                            <el-button size="mini" type="warning" @click="openDetailDialog(scope.row)">编辑</el-button>
+                            <el-button size="mini" type="danger" :loading="deletingId === scope.row.id" @click="deleteItem(scope.row)">删除</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <div class="pagination-bar">
+                    <el-pagination
+                        background
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :current-page="pagination.pageNumber"
+                        :page-size="pagination.pageSize"
+                        :total="pagination.total"
+                        @size-change="handleSizeChange"
+                        @current-change="handleCurrentChange">
+                    </el-pagination>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <el-dialog title="预警设置" :close-on-click-modal="false" :visible.sync="warningVisible"
+               width="520px" class="item-editor-dialog">
+        <el-form :model="formModel" label-position="top" class="item-form">
+            <el-row :gutter="12">
+                <el-col :span="12">
+                    <el-form-item label="物品名称">
+                        <el-input v-model="formModel.itemName" disabled></el-input>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="型号规格">
+                        <el-input v-model="formModel.modelSpec" disabled></el-input>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+            <div class="warning-settings">
+                <el-row :gutter="12">
+                    <el-col :span="12">
+                        <el-form-item label="固定预警值">
+                            <el-input v-model="formModel.warningFixedValue"  :controls="false" type="number" ></el-input>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+            </div>
+        </el-form>
+        <span slot="footer" class="dialog-footer">
+            <el-button type="danger" @click="warningVisible = false">取消</el-button>
+            <el-button type="success" @click="saveWarningSetting">保存设置</el-button>
+        </span>
+    </el-dialog>
+
+    <el-dialog :title="drawerMode === 'add' ? '添加物品' : '编辑物品'" :close-on-click-modal="false" :visible.sync="drawerVisible"
+               width="620px" class="item-editor-dialog">
+        <el-form v-loading="drawerLoading" :model="formModel" label-position="top" class="item-form">
+            <el-row :gutter="16">
+                <el-col :span="8"><el-form-item label="物品编号"><el-input v-model="formModel.itemNo"></el-input></el-form-item></el-col>
+                <el-col :span="8"><el-form-item label="物品名称"><el-input v-model="formModel.itemName"></el-input></el-form-item></el-col>
+                <el-col :span="8"><el-form-item label="品牌"><el-input v-model="formModel.brand"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="16">
+                <el-col :span="12"><el-form-item label="型号规格"><el-input type="textarea" :rows="4" maxlength="500" show-word-limit v-model="formModel.modelSpec"></el-input></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="单位"><el-input v-model="formModel.unit"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="16">
+                <el-col :span="12">
+                    <el-form-item label="类别">
+                        <el-select v-model="formModel.category" placeholder="请选择类别">
+                            <el-option v-for="item in dictList" :key="item" :label="item" :value="item"></el-option>
+                        </el-select>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12"><el-form-item label="备注"><el-input v-model="formModel.remark"></el-input></el-form-item></el-col>
+            </el-row>
+            <div class="warning-settings">
+                <div class="warning-title">预警设置（可选）</div>
+                <el-row :gutter="16">
+                    <el-col :span="12">
+                        <el-form-item label="固定预警值">
+                            <el-input type="number" v-model="formModel.warningFixedValue" placeholder="不设置则使用百分比"></el-input>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+            </div>
+        </el-form>
+        <span slot="footer" class="dialog-footer">
+            <el-button type="danger" @click="drawerVisible = false">取消</el-button>
+            <el-button type="success" :loading="drawerLoading" @click="submitForm(drawerMode==='add'?0:currentRow.id)">{{ drawerMode === 'add' ? '确认添加' : '确认修改' }}</el-button>
+        </span>
+    </el-dialog>
+</div>

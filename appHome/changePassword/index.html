@@ -1,0 +1,96 @@
+<div class="change-password" v-show="visible">
+    <div class="change-password-overlay" @click="handleMaskClick"></div>
+    <div class="change-password-container">
+      <div class="change-password-header">
+        <h2 class="change-password-title">{{ title }}</h2>
+        <span v-if="showCloseButton" class="change-password-close" @click="hide"
+          >×</span
+        >
+      </div>
+      <div class="change-password-content">
+        <el-form
+          :model="form"
+          :rules="rules"
+          ref="form"
+          label-width="100px"
+          class="change-password-form"
+          @submit.native.prevent="handleSubmit"
+        >
+          <el-form-item label="登录账号">
+            <el-input
+              v-model="form.loginAccount"
+              placeholder="请输入登录账号"
+            >
+            </el-input>
+          </el-form-item>
+  
+          <el-form-item label="原密码" prop="oldPassword">
+            <el-input
+              v-model="form.oldPassword"
+              :type="passwordType.oldPassword"
+              placeholder="请输入原密码"
+              autocomplete="off"
+            >
+              <i
+                slot="suffix"
+                :class="passwordType.oldPassword === 'password' ? 'el-icon-view' : 'el-icon-view'"
+                @click="togglePassword('oldPassword')"
+                class="password-toggle-icon"
+              >
+              </i>
+            </el-input>
+          </el-form-item>
+  
+          <el-form-item label="新密码" prop="newPassword">
+            <el-input
+              v-model="form.newPassword"
+              :type="passwordType.newPassword"
+              placeholder="请输入新密码"
+              autocomplete="off"
+            >
+              <i
+                slot="suffix"
+                :class="passwordType.newPassword === 'password' ? 'el-icon-view' : 'el-icon-view'"
+                @click="togglePassword('newPassword')"
+                class="password-toggle-icon"
+              >
+              </i>
+            </el-input>
+          </el-form-item>
+  
+          <el-form-item label="确认新密码" prop="confirmPassword">
+            <el-input
+              v-model="form.confirmPassword"
+              :type="passwordType.confirmPassword"
+              placeholder="请再次输入新密码"
+              autocomplete="off"
+            >
+              <i
+                slot="suffix"
+                :class="passwordType.confirmPassword === 'password' ? 'el-icon-view' : 'el-icon-view'"
+                @click="togglePassword('confirmPassword')"
+                class="password-toggle-icon"
+              >
+              </i>
+            </el-input>
+          </el-form-item>
+  
+          <div class="password-hint">
+            <p>提示：密码长度至少8位！由数字、大、小写字母、符号等字符组成</p>
+          </div>
+  
+          <div class="form-actions">
+            <el-button
+              type="primary"
+              :loading="loading"
+              @click="handleSubmit"
+              class="submit-btn"
+            >
+              {{ loading ? '提交中...' : '确定' }}
+            </el-button>
+            <el-button v-if="showCancelButton" @click="hide">取消</el-button>
+          </div>
+        </el-form>
+      </div>
+    </div>
+  </div>

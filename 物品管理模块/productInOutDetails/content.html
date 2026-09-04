@@ -1,0 +1,116 @@
+<div class="maProductInOutDetails">
+    <div class="wrap">
+        <div class="container">
+            <div class="query-panel static-card">
+                <div class="query-left">
+                    <el-date-picker v-model="queryForm.startDate" type="datetime" value-format="yyyy-MM-dd HH:mm:ss" format="yyyy/MM/dd HH:mm:ss"  class="query-item query-date"></el-date-picker>
+                    <el-date-picker v-model="queryForm.endDate" type="datetime" value-format="yyyy-MM-dd HH:mm:ss" format="yyyy/MM/dd HH:mm:ss"  class="query-item query-date"></el-date-picker>
+                    <el-select v-model="queryForm.areaCode" placeholder="全部片区" class="query-item query-select" clearable>
+                        <el-option label="全部片区" value=""></el-option>
+                        <el-option label="北一片区" value="北一片区"></el-option>
+                        <el-option label="北二片区" value="北二片区"></el-option>
+                        <el-option label="东片区" value="东片区"></el-option>
+                        <el-option label="中片区" value="中片区"></el-option>
+                        <el-option label="西南片区" value="西南片区"></el-option>
+                    </el-select>
+                    <el-button type="primary" class="action-btn action-search" @click="search">搜索</el-button>
+                    <el-button class="action-btn action-reset" @click="resetQuery">重置</el-button>
+                    <el-button type="success" class="action-btn action-export" @click="handleExport">导出</el-button>
+                </div>
+                <div class="type-box static-card">
+                    <div class="type-box-title">记录类型筛选</div>
+                    <div class="type-box-buttons">
+                        <el-button
+                            v-for="tab in recordTypeTabs"
+                            :key="tab.value"
+                            size="small"
+                            :type="tab.active ? 'success' : 'default'"
+                            @click="setRecordType(tab)">
+                            {{ tab.label }}
+                        </el-button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-shell static-card">
+                <el-table :data="tableData" border  class="record-table" height="calc(100% - 48px)" v-loading="loading">
+                    <el-table-column type="selection" width="38"></el-table-column>
+                    <el-table-column prop="areaCode" label="片区" min-width="100"></el-table-column>
+                    <el-table-column prop="operationType" label="操作类型" min-width="100"></el-table-column>
+                    <el-table-column prop="operateTime"  label="申请时间" min-width="150"></el-table-column>
+                    <el-table-column prop="operatorName" label="操作人" min-width="100"></el-table-column>
+                    <el-table-column prop="recipientText" label="领用人" min-width="100"></el-table-column>
+                    <el-table-column prop="itemName" label="物品名称" min-width="120"></el-table-column>
+                    <el-table-column prop="itemSpec" label="型号规格" min-width="120"></el-table-column>
+                    <el-table-column prop="beiyiQuantity" label="北一片区数量" min-width="120"></el-table-column>
+                    <el-table-column prop="beierQuantity" label="北二片区数量" min-width="120"></el-table-column>
+                    <el-table-column prop="dongQuantity" label="东片区数量" min-width="110"></el-table-column>
+                    <el-table-column prop="zhongQuantity" label="中片区数量" min-width="110"></el-table-column>
+                    <el-table-column prop="xinanQuantity" label="西南片区数量" min-width="120"></el-table-column>
+                    <el-table-column prop="yifengQuantity" label="益丰片区数量" min-width="120"></el-table-column>
+                    <el-table-column label="操作" width="80" fixed="right">
+                        <template slot-scope="scope">
+                            <el-button type="text" size="mini" @click="openDetailDialog(scope.row)">查看</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <div class="pagination-bar">
+                    <el-pagination
+                        background
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :current-page="pagination.pageNumber"
+                        :page-size="pagination.pageSize"
+                        :total="pagination.total"
+                        @size-change="handleSizeChange"
+                        @current-change="handleCurrentChange">
+                    </el-pagination>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <el-dialog title="出入库详情" :close-on-click-modal="false" :visible.sync="detailVisible" width="940px" custom-class="product-detail-dialog" @close="closeDetailDialog">
+        <div class="product-detail-body">
+            <div class="detail-section-card">
+                <div class="detail-section-title">出入库记录基本信息</div>
+                <div class="detail-info-grid">
+                    <div class="detail-info-item"><span class="detail-label">操作类型</span><span class="detail-value">{{ detailRow.operationType || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">操作时间</span><span class="detail-value">{{ detailRow.operateTime || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">操作人</span><span class="detail-value">{{ detailRow.operatorName || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">片区</span><span class="detail-value">{{ detailRow.areaCode || '-' }}</span></div>
+                    <div class="detail-info-item detail-info-item-full"><span class="detail-label">领用人</span><span class="detail-value">{{ detailRow.recipientText || '-' }}</span></div>
+                    <div class="detail-info-item detail-info-item-full"><span class="detail-label">备注</span><span class="detail-value">{{ detailRow.remark || '-' }}</span></div>
+                </div>
+            </div>
+
+            <div class="detail-section-card">
+                <div class="detail-section-title">出入库产品详情</div>
+                <el-table :data="[detailRow]" border class="detail-record-table" height="116">
+                    <el-table-column prop="itemName" label="物品名称" min-width="90"></el-table-column>
+                    <el-table-column prop="itemSpec" label="型号规格" min-width="90"></el-table-column>
+                    <el-table-column prop="unitPrice" label="单价" min-width="70"></el-table-column>
+                    <el-table-column prop="beiyiQuantity" label="北一片区" min-width="80"></el-table-column>
+                    <el-table-column prop="beierQuantity" label="北二片区" min-width="80"></el-table-column>
+                    <el-table-column prop="dongQuantity" label="东片区" min-width="80"></el-table-column>
+                    <el-table-column prop="zhongQuantity" label="中片区" min-width="80"></el-table-column>
+                    <el-table-column prop="xinanQuantity" label="西南片区" min-width="80"></el-table-column>
+                    <el-table-column prop="yifengQuantity" label="益丰片区" min-width="80"></el-table-column>
+                    <el-table-column  label="总数量" min-width="80">
+                        <template slot-scope="scope">
+                            {{ scope.row.beiyiQuantity + scope.row.beierQuantity + scope.row.dongQuantity + scope.row.zhongQuantity + scope.row.xinanQuantity }}
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <!-- <div class="detail-section-card detail-material-card">
+                <div class="detail-section-title">出入库资料</div>
+                <div class="detail-material-empty">暂无出入库资料</div>
+                <div class="detail-material-actions">
+                    <input ref="detailFileInput" type="file" class="detail-file-input" />
+                    <el-button type="success" class="detail-upload-btn">上传资料</el-button>
+                </div>
+            </div> -->
+        </div>
+    </el-dialog>
+</div>

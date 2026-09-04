@@ -1,0 +1,511 @@
+<div class="maInventoryManagement">
+    <div class="wrap">
+        <div class="container">
+            <div class="query-panel static-card">
+                <el-input v-model="queryForm.category" clearable placeholder="输入物品类别" class="query-item"></el-input>
+                <el-input v-model="queryForm.itemName" clearable placeholder="输入物品名称" class="query-item"></el-input>
+                <el-button type="primary" class="action-btn action-search" @click="search">搜索</el-button>
+                <el-button class="action-btn action-reset" @click="resetQuery">重置</el-button>
+                <el-button type="success" class="action-btn action-green" @click="openPurchaseDialog">采购申请</el-button>
+                <el-badge
+                    class="action-badge action-badge--purple"
+                    :value="approvalManageBadgeCount"
+                    :hidden="approvalManageBadgeCount <= 0"
+                    >
+                    <el-button type="warning" class="action-btn action-purple" @click="openRequestDialog('待审批')">审批管理</el-button>
+                </el-badge>
+                <el-badge
+                    class="action-badge action-badge--emerald"
+                    :value="hasAuthInStockNum"
+                    :hidden="hasAuthInStockNum <= 0"
+                    >
+                    <el-button type="success" class="action-btn action-emerald" @click="openRequestDialog('待入库')">入库管理</el-button>
+                </el-badge>
+                <el-button type="primary" class="action-btn action-blue" @click="downloadStockList">导出库存</el-button>
+                <!-- <el-button type="primary" class="action-btn action-blue" @click="openPurchaseDialog">导出采购申请</el-button> -->
+            </div>
+
+            <div class="warehouse-panel static-card">
+                <div class="panel-title">片区筛选</div>
+                <div class="region-tabs">
+                    <template v-if="userAuth.roleList.indexOf('物资-总部综管员') !== -1">
+                        <el-button
+                            v-for="area in areaList"
+                            :key="area.value || 'all'"
+                            size="small"
+                            class="region-tab"
+                            :type="queryForm.areaCode === area.value ? 'success' : ''"
+                            :class="{ 'is-active': queryForm.areaCode === area.value }"
+                            @click="handleAreaChange(area.value)">
+                            {{ area.label }}
+                        </el-button>
+                    </template>
+                    <template v-else>
+                        <el-button
+                            v-for="area in userAuth.wzqpList"
+                            :key="area"
+                            size="small"
+                            class="region-tab"
+                            :type="queryForm.areaCode === area ? 'success' : ''"
+                            :class="{ 'is-active': queryForm.areaCode === area }"
+                            @click="handleAreaChange(area)">
+                            {{ area }}
+                        </el-button>
+                    </template>
+                </div>
+            </div>
+
+            <div class="table-shell static-card">
+                <el-table :data="tableData" v-loading="loading" border  class="item-table" height="calc(100% - 48px)" :row-class-name="getStockRowClassName">
+                    <el-table-column type="selection" width="44"></el-table-column>
+                    <el-table-column prop="itemNo" label="物品编号" min-width="120"></el-table-column>
+                    <el-table-column prop="itemName" label="物品名称" min-width="140"></el-table-column>
+                    <el-table-column prop="category" label="类别" min-width="120"></el-table-column>
+                    <el-table-column prop="modelSpec" label="型号规格" min-width="120"></el-table-column>
+                    <el-table-column prop="unit" label="单位" width="90"></el-table-column>
+                    <el-table-column prop="totalQty" label="总库存" width="100"></el-table-column>
+                    <el-table-column
+                        v-for="area in visibleAreaColumns"
+                        :key="area.value"
+                        :label="area.label + '库存'"
+                        min-width="120">
+                        <template slot-scope="scope">
+                            {{ (scope.row.areaQtyMap && (scope.row.areaQtyMap[area.value] !== undefined ? scope.row.areaQtyMap[area.value] : scope.row.areaQtyMap[area.label])) || 0 }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="220" fixed="right">
+                        <template slot-scope="scope">
+                            <el-button size="mini" type="primary" @click="openDetailDialog(scope.row)">查看</el-button>
+                            <el-button size="mini" type="warning" @click="openTransferDialog(scope.row)">转移</el-button>
+                            <el-button size="mini" type="danger" @click="openOutboundDialog(scope.row)">出库</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <div class="pagination-bar">
+                    <el-pagination
+                        background
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :total="pagination.total"
+                        :page-size="pagination.pageSize"
+                        :current-page="pagination.pageNumber"
+                        @current-change="handleCurrentChange">
+                    </el-pagination>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <el-dialog title="库存转移" :close-on-click-modal="false" :visible.sync="transferVisible" width="620px" custom-class="transfer-dialog">
+        <div class="transfer-dialog-body">
+            <el-form :model="transferForm" inline class="transfer-form">
+               <el-col :span="12">
+                    <el-form-item class="transfer-field" label="物品名称">
+                        <el-input v-model="transferForm.productName" disabled></el-input>
+                    </el-form-item>
+               </el-col>
+               <el-col :span="12">
+                    <el-form-item class="transfer-field" label="型号规格">
+                        <el-input v-model="transferForm.spec" disabled></el-input>
+                    </el-form-item>
+                </el-col>
+                <div class="transfer-section-title">片区信息</div>
+                <el-col :span="12">
+                    <el-form-item class="transfer-field" label="源片区">
+                        <el-select v-model="transferForm.sourceWarehouse" class="transfer-select">
+                            <el-option
+                            v-for="area in userAuth.wzqpList"
+                            :key="area"
+                            :label="area"
+                            :value="area">
+                            </el-option>
+                        </el-select>
+                        
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item class="transfer-field" label="源片区库存"> 
+                        <el-input :value="getWarehouseStock(transferRow, transferForm.sourceWarehouse)" disabled ></el-input>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item class="transfer-field" label="目标片区">
+                        <el-select v-model="transferForm.targetWarehouse"  class="transfer-select">
+                            <el-option
+                            v-for="area in filterAreaList"
+                            :key="area.value"
+                            :label="area.label"
+                            :value="area.value">
+                            </el-option>
+                        </el-select>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item class="transfer-field" label="目标片区库存">
+                        <el-input :value="getWarehouseStock(transferRow, transferForm.targetWarehouse)" disabled></el-input>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item class="transfer-field" label="转移数量">
+                        <el-input type="number" v-model="transferForm.transferNum"></el-input>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item class="transfer-field" label="备注（可选）">
+                        <el-input v-model="transferForm.remark" type="textarea" :rows="3" placeholder="请输入转移原因等信息"></el-input>
+                    </el-form-item>
+                </el-col>
+            </el-form>
+        </div>
+        <div slot="footer" class="transfer-footer">
+            <el-button type="danger" class="transfer-cancel" @click="transferVisible = false">取消</el-button>
+            <el-button type="success" class="transfer-submit" :loading="transferSubmitting" @click="confirmTransfer">确认转移</el-button>
+        </div>
+    </el-dialog>
+
+    <el-dialog title="产品采购申请" :close-on-click-modal="false" @close="closePurchaseDialog" :visible.sync="purchaseVisible" width="760px" custom-class="purchase-dialog">
+            <el-form ref="purchaseForm" :model="purchaseForm" :rules="purchaseFormRules" inline class="purchase-top-form">
+                <el-form-item label="申请人" class="purchase-field purchase-field-half">
+                    <el-input v-model="purchaseForm.applicant" disabled></el-input>
+                </el-form-item>
+                <el-form-item label="申请时间" prop="applyTime"  class="purchase-field purchase-field-half">
+                    <el-date-picker v-model="purchaseForm.applyTime" type="datetime" value-format="yyyy-MM-dd HH:mm:ss" placeholder="请选择时间" class="purchase-time"></el-date-picker>
+                </el-form-item>
+            </el-form>
+            <div class="purchase-actions-top">
+                <el-button type="success" class="purchase-top-btn" @click="openSelectProductDialog">添加现有产品</el-button>
+                <el-button type="success" class="purchase-top-btn" @click="downloadPurchaseTemplate">下载模板</el-button>
+                <el-button type="primary" class="purchase-top-btn" @click="triggerPurchaseImport">导入模板</el-button>
+                <input ref="purchaseImportInput" type="file" accept=".xlsx,.xls" style="display:none;" @change="handleImportTemplate">
+            </div>
+            <div class="purchase-section-title">采购产品清单</div>
+            <div class="purchase-table-wrap">
+                <div class="purchase-virtual-table">
+                    <div class="purchase-virtual-header">
+                        <div class="purchase-virtual-cell" style="min-width:80px">物品名称</div>
+                        <div class="purchase-virtual-cell" style="min-width:70px">类别</div>
+                        <div class="purchase-virtual-cell" style="min-width:78px">型号规格</div>
+                        <div class="purchase-virtual-cell" style="min-width:120px">单价</div>
+                        <div class="purchase-virtual-cell" style="min-width:120px">北一片区数量</div>
+                        <div class="purchase-virtual-cell" style="min-width:110px">北二片区数量</div>
+                        <div class="purchase-virtual-cell" style="min-width:110px">东片区数量</div>
+                        <div class="purchase-virtual-cell" style="min-width:110px">中片区数量</div>
+                        <div class="purchase-virtual-cell" style="min-width:110px">西南片区数量</div>
+                        <div class="purchase-virtual-cell" style="min-width:110px">益丰片区数量</div>
+                        <div class="purchase-virtual-cell" style="width:70px;flex-shrink:0">操作</div>
+                    </div>
+                    <div class="purchase-virtual-body-wrap" @scroll="handlePurchaseVirtualScroll" ref="purchaseVirtualBody">
+                        <div class="purchase-virtual-spacer" :style="{ height: purchaseVirtualTotalHeight + 'px' }">
+                            <div class="purchase-virtual-rows" :style="{ transform: 'translateY(' + purchaseVirtualOffset + 'px)' }">
+                                <div class="purchase-virtual-row" v-for="(item, vIdx) in purchaseVirtualVisibleItems" :key="item.index">
+                                    <div class="purchase-virtual-cell" style="min-width:80px" :title="item.row.itemName">{{ item.row.itemName }}</div>
+                                    <div class="purchase-virtual-cell" style="min-width:70px" :title="item.row.itemType">{{ item.row.itemType }}</div>
+                                    <div class="purchase-virtual-cell" style="min-width:78px" :title="item.row.itemSpec">{{ item.row.itemSpec }}</div>
+                                    <div class="purchase-virtual-cell" style="min-width:120px">
+                                        <el-input type="number" :min="0" v-model.number="item.row.unitPrice"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="min-width:120px">
+                                        <el-input type="number" :min="0" v-model="item.row.northOne" :disabled="!isAreaAuthorized('北一片区')"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="min-width:110px">
+                                        <el-input type="number" :min="0" v-model="item.row.northTwo" :disabled="!isAreaAuthorized('北二片区')"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="min-width:110px">
+                                        <el-input type="number" :min="0" v-model="item.row.east" :disabled="!isAreaAuthorized('东片区')"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="min-width:110px">
+                                        <el-input type="number" :min="0" v-model="item.row.central" :disabled="!isAreaAuthorized('中片区')"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="min-width:110px">
+                                        <el-input type="number" :min="0" v-model="item.row.southWest" :disabled="!isAreaAuthorized('西南片区')"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="min-width:110px">
+                                        <el-input type="number" :min="0" v-model="item.row.yifeng" :disabled="!isAreaAuthorized('益丰片区')"></el-input>
+                                    </div>
+                                    <div class="purchase-virtual-cell" style="width:70px;flex-shrink:0">
+                                        <el-button type="text" class="purchase-remove-btn" @click="removePurchaseItemVirtual(vIdx)">删除</el-button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div slot="footer" class="purchase-footer">
+                <el-button type="danger" class="purchase-cancel" @click="purchaseVisible = false">取消</el-button>
+                <el-button type="success" class="purchase-submit" @click="openConfirmPurchaseDialog">确认申请</el-button>
+            </div>
+    </el-dialog>
+
+    <el-dialog title="选择现有产品" @close="closeSelectProductDialog" :close-on-click-modal="false" :visible.sync="selectProductVisible" width="560px" custom-class="select-product-dialog">
+        <div class="select-product-body">
+            <el-form  ref="selectProductForm" :rules="selectProductFormRules" :model="selectProductForm" label-position="top" class="select-product-form">
+                <el-form-item prop="itemName" label="选择或输入产品">
+                    <el-select v-model="selectProductForm.itemName" filterable allow-create default-first-option :loading="productOptionsLoading" placeholder="输入产品名称、类型、型号或编号，或从列表中选择" class="select-product-input">
+                        <el-option v-for="option in productOptions" :key="option.itemName" :label="option.label" :value="option.itemName">
+                            <el-tooltip effect="dark" :content="option.label" placement="right" popper-class="my-tooltip" :open-delay="300">
+                                <div class="select-product-option-label">{{ option.label }}</div>
+                            </el-tooltip>
+                        </el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item prop="unitPrice" label="单价">
+                    <el-input type="number" min="0" v-model="selectProductForm.unitPrice" placeholder="输入单价"></el-input>
+                </el-form-item>
+                <div class="select-product-grid">
+                    <div class="select-product-item" v-for="area in filterAreaList" :key="area.value">
+                        <el-form-item :prop="`area.${area.key}`" :label="area.label">
+                        <el-input min="0" type="number" v-model="selectProductForm.area[area.key]" :disabled="!isAreaAuthorized(area.value)" ></el-input>
+                        </el-form-item>
+                    </div>
+                </div>
+            </el-form>
+        </div>
+        <div slot="footer" class="select-product-footer">
+            <el-button type="danger" class="select-product-cancel" @click="selectProductVisible = false">取消</el-button>
+            <el-button type="success" class="select-product-submit" @click="confirmAddPurchaseItem">确认添加</el-button>
+        </div>
+    </el-dialog>
+
+    <el-dialog title="确认采购申请" :close-on-click-modal="false"  :visible.sync="confirmPurchaseVisible" width="760px" custom-class="confirm-purchase-dialog">
+        <div class="confirm-purchase-body">
+            <div class="confirm-purchase-title">采购申请确认</div>
+            <div class="confirm-purchase-line"><span class="confirm-purchase-label">申请人：</span><span>{{ confirmPurchaseForm.applicant }}</span></div>
+            <div class="confirm-purchase-line"><span class="confirm-purchase-label">申请时间：</span><span>{{ confirmPurchaseForm.applyTime }}</span></div>
+            <div class="confirm-purchase-line confirm-purchase-section">采购产品清单：</div>
+            <div class="confirm-purchase-table-wrap">
+                <el-table :data="confirmPurchaseForm.items" border class="confirm-purchase-table" height="100">
+                    <el-table-column prop="itemName" label="物品名称" min-width="100"></el-table-column>
+                    <el-table-column prop="itemType" label="类别" min-width="100"></el-table-column>
+                    <el-table-column prop="itemSpec" label="型号规格" min-width="100"></el-table-column>
+                    <el-table-column prop="unitPrice" label="单价" width="90"></el-table-column>
+                    <el-table-column prop="quantity" label="总数量" width="90"></el-table-column>
+                </el-table>
+            </div>
+        </div>
+        <div slot="footer" class="confirm-purchase-footer">
+            <el-button type="danger" class="confirm-purchase-cancel" @click="confirmPurchaseVisible = false">取消</el-button>
+            <el-button type="success" class="confirm-purchase-submit" :loading="purchaseSubmitting" @click="confirmPurchaseSubmit">确认提交</el-button>
+        </div>
+    </el-dialog>
+
+
+    <el-dialog title="产品详情" :close-on-click-modal="false" :visible.sync="detailVisible" width="900px" custom-class="product-detail-dialog">
+        <div class="product-detail-body" v-loading="detailLoading">
+            <div class="detail-section-title">{{ detailRow.itemName || '未命名产品' }} - 详细信息</div>
+            <div class="detail-info-panel">
+                <div class="detail-info-grid">
+                    <div class="detail-info-item"><span class="detail-label">物品编号</span><span class="detail-value">{{ detailRow.itemNo || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">物品名称</span><span class="detail-value">{{ detailRow.itemName || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">类别</span><span class="detail-value">{{ detailRow.category || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">型号规格</span><span class="detail-value">{{ detailRow.modelSpec || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">单位</span><span class="detail-value">{{ detailRow.unit || '-' }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">总库存</span><span class="detail-value">{{ detailRow.totalQty !== undefined && detailRow.totalQty !== null ? detailRow.totalQty : '-' }}</span></div>
+                    <div class="detail-info-item" v-for="area in filterAreaList" :key="area.value"><span class="detail-label">{{ area.label }}</span><span class="detail-value">{{ getWarehouseStock(detailRow, area.value) }}</span></div>
+                    <div class="detail-info-item"><span class="detail-label">供应商</span><span class="detail-value">{{ detailRow.supplier || '未知供应商' }}</span></div>
+                </div>
+            </div>
+            <div class="detail-section-title">出入库记录</div>
+            <div class="detail-record-wrap" v-loading="detailRecordsLoading">
+                <el-table :data="detailRecordList" border stripe class="detail-record-table" height="320">
+                    <el-table-column prop="operationType" label="操作类型" min-width="100"></el-table-column>
+                    <el-table-column prop="operateTime" label="操作时间" min-width="130"></el-table-column>
+                    <el-table-column prop="operatorName" label="操作人" min-width="90"></el-table-column>
+                    <el-table-column prop="unitPrice" label="单价" min-width="80"></el-table-column>
+                    <template v-for="area in filterAreaList" :key="area.value">
+                        <el-table-column :prop="`${area.keyInCN}Quantity`" :label="area.label" min-width="90"></el-table-column>
+                    </template>
+                    <el-table-column prop="remark" label="备注" min-width="140"></el-table-column>
+                </el-table>
+            </div>
+        </div>
+    </el-dialog>
+
+    <el-dialog title="确认入库" :close-on-click-modal="false" :visible.sync="inventoryConfirmVisible" width="360px" custom-class="inventory-confirm-dialog">
+        <div class="inventory-confirm-body">此页面显示</div>
+        <div class="inventory-confirm-subtitle">采购入库成功！</div>
+        <div slot="footer" class="inventory-confirm-footer">
+            <el-button type="primary" class="inventory-confirm-close" @click="closeInventoryConfirm">关闭</el-button>
+        </div>
+    </el-dialog>
+
+    <el-dialog title="产品出库" :close-on-click-modal="false" :visible.sync="outboundVisible" width="760px" custom-class="outbound-dialog">
+        <div class="outbound-dialog-body">
+            <el-form :model="outboundForm" inline class="outbound-top-form">
+                <el-col :span="12">
+                    <el-form-item label="物品名称" class="outbound-field outbound-field-half">
+                        <el-input v-model="outboundForm.itemName" disabled></el-input>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="类别" class="outbound-field outbound-field-half">
+                        <el-input v-model="outboundForm.itemType" disabled></el-input>
+                    </el-form-item>
+                </el-col>   
+                <el-col :span="12">
+                    <el-form-item label="型号规格" class="outbound-field outbound-field-half">
+                        <el-input v-model="outboundForm.spec" disabled></el-input>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="出库时间" class="outbound-field outbound-field-half">
+                    <el-date-picker v-model="outboundForm.outTime" type="datetime" placeholder="请选择出库时间" class="outbound-time"></el-date-picker>
+                </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                <el-form-item label="出库片区" class="outbound-field outbound-field-half">
+                    <el-select v-model="outboundForm.outWarehouse" class="outbound-select">
+                        <el-option label="北一片区" value="北一片区"></el-option>
+                        <el-option label="北二片区" value="北二片区"></el-option>
+                        <el-option label="东片区" value="东片区"></el-option>
+                        <el-option label="中片区" value="中片区"></el-option>
+                        <el-option label="西南片区" value="西南片区"></el-option>
+                        <el-option label="益丰片区" value="益丰片区"></el-option>
+                    </el-select>
+                </el-form-item>
+                </el-col>
+            </el-form>
+            <div class="outbound-actions-top">
+                <el-button type="success" class="outbound-top-btn" @click="addOutboundRecipient">添加领用人</el-button>
+            </div>
+            <div class="outbound-table-wrap">
+                <el-table :data="outboundForm.rows" border class="outbound-table" height="120">
+                    <el-table-column label="领用人" min-width="120">
+                        <template slot-scope="scope">
+                            <el-input v-model="scope.row.name"></el-input>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="数量" min-width="90">
+                        <template slot-scope="scope">
+                            <el-input v-model="scope.row.quantity"></el-input>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="用途" min-width="140">
+                        <template slot-scope="scope">
+                            <el-input v-model="scope.row.purpose"></el-input>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="70">
+                        <template slot-scope="scope">
+                            <el-button type="text" class="outbound-remove-btn" @click="removeOutboundRecipient(scope.$index)">删除</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+        </div>
+        <div slot="footer" class="outbound-footer">
+            <el-button type="danger" class="outbound-cancel" @click="outboundVisible = false">取消</el-button>
+            <el-button type="success" class="outbound-submit" :loading="outboundSubmitting" @click="confirmOutbound">确认出库</el-button>
+        </div>
+    </el-dialog>
+
+    <el-dialog :title="requestDialogTitle" :close-on-click-modal="false" :visible.sync="requestDialogVisible" width="900px" custom-class="approval-dialog">
+        <div class="approval-dialog-tabs" v-if="requestDialogListType==='待审批'||requestDialogListType==='我的上报'">
+            <el-tabs v-model="requestDialogListType" @tab-click="handleRequestDialogTabChange">
+                <el-tab-pane name="待审批">
+                    <span slot="label">
+                        待审批
+                        <el-badge :value="hasAuthApproveNum" :hidden="hasAuthApproveNum <= 0"  class="tab-badge"></el-badge>
+                    </span>
+                </el-tab-pane>
+                <el-tab-pane name="我的上报">
+                    <span slot="label">
+                        我的申请
+                        <el-badge :value="hasAuthResubmitNum" :hidden="hasAuthResubmitNum <= 0"  class="tab-badge"></el-badge>
+                    </span>
+                </el-tab-pane>
+            </el-tabs>
+        </div>
+        <div class="approval-dialog-body" v-loading="requestListLoading">
+            <div class="approval-section-title" v-if="requestDialogListType==='待入库'">待入库采购申请</div>
+            <div class="approval-card" v-for="item in requestList" :key="item.workOrderNo">
+                <div class="approval-card-header">
+                    <div class="approval-meta">
+                        <el-col :span="12">
+                            <div><span class="approval-label">申请编号：</span>{{ item.workOrderNo }}</div>
+                        </el-col>
+                        <el-col :span="12">
+                            <div><span class="approval-label">申请人：</span>{{ item.applyTaskInfo && item.applyTaskInfo.userName }}</div>
+                        </el-col>
+                        <el-col :span="12">
+                            <div><span class="approval-label">申请时间：</span>{{ item.applyTaskInfo && item.applyTaskInfo.submitDate }}</div>
+                        </el-col>
+                        <el-col :span="12">
+                            <div><span class="approval-label">申请片区：</span>{{ item.area }}</div>
+                        </el-col>
+                        <el-col :span="12">
+                            <div>
+                                <span class="approval-label">当前状态：</span>
+                                <span
+                                    v-if="requestDialogListType === '我的上报'"
+                                    class="approval-status-tag"
+                                    :class="item.currentTask === '采购申请' ? 'is-refused' : 'is-pending'"
+                                >
+                                    {{ item.currentTask === '采购申请' ? '已驳回' : item.currentTaskDisplay }}
+                                </span>
+                                <span v-else>{{ item.currentTaskDisplay }}</span>
+                            </div>
+                        </el-col>
+                    </div>
+                    <div class="approval-retry-actions" v-if="requestDialogListType === '我的上报' && item.currentTask === '采购申请'">
+                        <el-button type="warning" class="approval-retry-btn" @click="openResubmitPurchaseDialog(item)">重新提交</el-button>
+                    </div>
+                    <template v-if="item.hasAuth">
+                        <div class="approval-actions" v-if="requestDialogListType==='待审批'&&(item.currentTaskDisplay === '片区长审批'||item.currentTaskDisplay === '总部综管员审批')">
+                            <el-date-picker v-model="item.inboundTime" v-if="item.currentTaskDisplay === '总部综管员审批'" type="datetime" value-format="yyyy-MM-dd HH:mm:ss" placeholder="请选择入库时间" class="in-stock-time"></el-date-picker>
+                            <el-button type="success" class="approval-allow" :loading="approvePurchaseRequestLoading&&currentPurchaseRequest&&currentPurchaseRequest.workOrderNo===item.workOrderNo" @click="approvePurchaseRequest(item, true)">同意</el-button>
+                            <el-button type="danger" class="approval-reject" :loading="refusePurchaseRequestLoading&&currentPurchaseRequest&&currentPurchaseRequest.workOrderNo===item.workOrderNo" @click="approvePurchaseRequest(item, false)">拒绝</el-button>
+                        </div>
+                        <div class="approval-actions" v-if="requestDialogListType==='待入库'&&item.currentTaskDisplay === '待入库'">
+                            <el-button type="success" class="approval-allow" :loading="confirmInStockLoading&&currentPurchaseRequest.workOrderNo===item.workOrderNo" @click="confirmInStock(item)">确认入库</el-button>
+                        </div>
+                    </template>
+                    <!-- <template v-if="item.currentTaskDisplay==='审批不通过'">
+                        <div class="approval-refused">
+                            <el-tag type="danger" effect="plain" size="small">审批不通过</el-tag>
+                        </div>
+                    </template> -->
+                </div>
+                <div class="approval-subtitle">采购产品清单{{ requestDialogListType === '待审批' ? '' : '(可修改片区数据)' }}</div>
+                <div class="approval-table-wrap">
+                    <el-table :data="item.items" border class="approval-table" height="200">
+                        <el-table-column prop="itemName" label="物品名称" min-width="120"></el-table-column>
+                        <el-table-column prop="itemType" label="类别" min-width="110"></el-table-column>
+                        <el-table-column prop="itemSpec" label="型号规格" min-width="110"></el-table-column>
+                        <el-table-column prop="unitPrice" label="单价" width="90">
+                                <template v-if="requestDialogListType==='待入库'" slot-scope="scope">
+                                    <el-input type="number" :min="0" v-model="scope.row.unitPrice" ></el-input>
+                                </template>
+                        </el-table-column>
+                        <template v-if="requestDialogListType === '待审批'||requestDialogListType==='我的上报'">
+                            <el-table-column v-for="area in filterAreaList" :key="area.value" :prop="`${area.keyInCN}Quantity`" :label="area.label" width="90">
+                            </el-table-column>
+                        </template>
+                        <template v-if="requestDialogListType==='待入库'">
+                            <el-table-column v-for="area in filterAreaList" :key="area.value" :label="area.label" width="180" class-name="approval-area-group">
+                                <el-table-column :prop="`${area.keyInCN}Quantity`" label="申请" width="90" class-name="approval-area-request">
+                                    <template slot-scope="scope">{{ scope.row[`${area.keyInCN}Quantity`] ||0}}</template>
+                                </el-table-column>
+                                <el-table-column :prop="`${area.keyInCN}InStockQuantity`" label="实际" width="90" class-name="approval-area-actual">
+                                    <template v-if="item.hasAuth" slot-scope="scope">
+                                        <el-input type="number" min="0" :max="scope.row[`${area.keyInCN}Quantity`]" v-model="scope.row[`${area.keyInCN}InStockQuantity`]" :disabled="!isAreaAuthorized(area.value)"></el-input>
+                                    </template>
+                                </el-table-column>
+                            </el-table-column>
+                        </template>
+                    </el-table>
+                </div>
+            </div>
+        </div>
+        <div slot="footer" class="approval-dialog-footer" >
+            <el-pagination
+                v-if="requestDialogPagination.total>0"
+                background
+                layout="total, prev, pager, next, sizes, jumper"
+                :current-page="requestDialogPagination.pageNumber"
+                :page-size="requestDialogPagination.pageSize"
+                :total="requestDialogPagination.total"
+                @current-change="handleRequestDialogCurrentChange"
+            ></el-pagination>
+        </div>
+        </el-dialog>
+</div>

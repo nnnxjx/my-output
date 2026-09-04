@@ -1,0 +1,52 @@
+<!--
+ * @Author: wuhuaxing
+ * @Date: 2024-08-13 20:42:31
+ * @LastEditTime: 2024-09-08 12:24:38
+ * @Description: 
+-->
+<div>
+    <mt-actionsheet :actions="localActions" v-model="sheetVisible" :closeOnClickModal="false">
+    </mt-actionsheet>
+    <div class="in-picUploadPanel" :class="{ 'bg_gray': bgGray }" v-for="(item,num) in picList">
+        <div class="title-cell" v-if="item.title">
+            <span style="color: red" v-if="item.require">*</span>
+            <span class="mint-cell-text">
+                {{item.title}}
+                <span class="smallNotice" v-if="!item.isHidesmallNotice &&item.limit != 0 ">(拍照请横拍)</span>
+            </span>
+        </div>
+        <div class="upload-img-area">
+            <div class="image-container" v-for="(pic,index) in item.uploadImgs">
+                <video :src="pic.url" :controls="false" v-if="item.type === 'video'"></video>
+                <img :src="pic.url" @click="picPreView(num, index)" v-else>
+                <div class="el-upload-list__item-actions upload-mask" v-show="pic.showDelOperation">
+                    <i class="el-icon-delete" @click="deleteImage(num,index)"></i>
+                </div>
+                <div class="top-right-del-btn" @click="deleteImage(num,index)" v-show="item.limit != 0">
+                    <i class="el-icon-close"></i>
+                </div>
+                <div class="video-play-btn" v-show="item.type === 'video'" @click="playVideo(pic.url)">
+                    <i class="el-icon-caret-right"></i>
+                </div>
+                <div v-if="item.isAdditional">
+                    <div class="additional-btn" @click="additionalClick(num, index)">{{pic.additional.length ? '已关联' : '点击关联'}}</div>
+                </div>
+                <div v-if="item.isAdditionalDetail">
+                    <div class="additional-btn" @click="additionalClick(num, index)">{{pic.additional.length ? '查看关联' : '未关联'}}</div>
+                </div>
+            </div>
+            <div class="el-upload el-upload--picture-card" @click="openActionSheet(num)"
+                v-show="item.uploadImgs.length < item.limit">
+                <i class="el-icon-plus"></i>
+                <el-progress class="uploadProgress" type="circle" :percentage="progressPercent" 
+                    v-show="progressVisible && num === imgNum"></el-progress>
+            </div>
+        </div>
+    </div>
+    <input style="display: none" type="file" ref="videoInput" @change="videoChange" accept=".mp4,.webm">
+    <canvas style="display: none" id="myCanvas" ref="canvas"></canvas>
+
+    <div class="picUploadPanel_play-video-wrapper" v-if="isShowPlayVideo" @click="isShowPlayVideo = false;">
+        <video :src="playVideoUrl" autoplay controls @click.stop=""></video>
+    </div>
+</div>
