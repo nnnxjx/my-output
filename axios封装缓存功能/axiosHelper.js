@@ -168,7 +168,11 @@ define(['axios','qs'],function (axios,qs) {
                                 reject(res)
                                 return 
                             }
-                            resolve(res)
+                            if(res.code==='200'){
+                                resolve(res)
+                            }else{
+                                reject(res)
+                            }
                         })
                         .catch((response)=> {
                             // 不成功的情况下删掉 statusMap 中的状态，能让下次请求重新请求
