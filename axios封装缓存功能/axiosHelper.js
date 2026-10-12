@@ -158,13 +158,17 @@ define(['axios','qs'],function (axios,qs) {
                                 })
                                 // 调用完成之后清掉，用不到了
                                 callbackMap.delete(cacheKey)
+                                resolve(res)
+                                return 
                             }else if(res.code!=='200'&&needCache&&callbackMap.has(cacheKey)) {
                                 callbackMap.get(cacheKey).forEach((callback) => {
                                     callback.onError(res)
                                 })
                                 callbackMap.delete(cacheKey)
+                                reject(res)
+                                return 
                             }
-                            resolve(res);
+                            resolve(res)
                         })
                         .catch((response)=> {
                             // 不成功的情况下删掉 statusMap 中的状态，能让下次请求重新请求

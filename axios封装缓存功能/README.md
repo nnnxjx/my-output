@@ -66,12 +66,13 @@ GET 和 POST 使用相同的触发方式：URL 上必须带有值的 `needCache`
                  │
                  ├─ 业务失败（HTTP 成功但 code 非 '200'）
                  │        ├─ statusMap.delete(key)
-                 │        ├─ 首个调用者 resolve(res)
-                 │        └─ 当前代码未清理/唤醒 callbackMap，合并进来的调用者会一直 pending
+                 │        ├─ 等待者执行 onError(res)，随后 delete callbackMap[key]
+                 │        └─ 首个调用者仍执行 resolve(res)
                  │
                  └─ HTTP/Axios 异常（进入 catch）
-                          └─ 当前 catch 引用了作用域外的 res，会抛出 ReferenceError，
-                             状态、等待队列和外层 Promise 都可能无法正常结算
+                          ├─ statusMap.delete(key)
+                          ├─ 等待者执行 onError(response)，随后 delete callbackMap[key]
+                          └─ 首个调用者 reject(response)
 ```
 
 ## 三、三种典型执行路径
@@ -93,7 +94,7 @@ if (currentStatus === 'complete') {
 
 ### 3. 请求进行中（pending）→ 合并请求（去重）
 
-后来者不发 HTTP，而是把自己的 `resolve/reject` 存进 `callbackMap`。当前实现只有业务成功时会统一唤醒这些调用者：
+后来者不发 HTTP，而是把自己的 `resolve/reject` 存进 `callbackMap`。首个请求结束后，成功时调用等待者的 `onSuccess`，业务失败或请求异常时调用 `onError`，随后删除等待队列：
 
 ```js
 if (currentStatus === 'pending') {
@@ -107,7 +108,7 @@ if (currentStatus === 'pending') {
 }
 ```
 
-> 这是典型的 **request deduplication / 请求合并** 设计：N 个组件同时请求同一接口，正常成功时只有 1 个真实 HTTP 请求，N 个调用者拿到同一份结果。当前异常路径存在未结算等待 Promise 的问题，见“已知限制”。
+> 这是典型的 **request deduplication / 请求合并** 设计：N 个组件同时请求同一接口，只有 1 个真实 HTTP 请求；完成后统一结算所有调用者。
 
 ## 四、状态流转（statusMap）
 
@@ -115,16 +116,16 @@ if (currentStatus === 'pending') {
   [不存在] ──首次缓存请求──► 'pending' ──业务成功──► 'complete'
                                 │
                                 ├─业务失败──► statusMap.delete(key)
-                                │              （callbackMap 仍残留）
+                                │              + reject 等待者并清理 callbackMap
                                 │
-                                └─HTTP 异常──► catch 中触发 ReferenceError，
-                                               可能继续停留在 pending
+                                └─HTTP 异常──► statusMap.delete(key)
+                                               + reject 等待者并清理 callbackMap
 ```
 
 - `'pending'`：请求已发出但未返回，此期间新调用会被合并；
 - `'complete'`：结果已入 `cacheMap`，此后新调用直接读缓存；
-- 业务失败会删除状态，不写入结果缓存；但当前不会清理 `callbackMap`。
-- HTTP/Axios 异常路径由于 `res` 作用域错误，可能无法删除 `pending` 状态。
+- 业务失败会删除状态、不写入缓存，并 reject 所有并发等待者；但首个请求仍然 resolve，调用语义并不完全一致。
+- HTTP/Axios 异常会删除状态、reject 等待者并清理 `callbackMap`，下次调用可以重新发起请求。
 
 ## 五、使用方式
 
@@ -240,8 +241,6 @@ api.get('/api/monitor/realtimeList.do').then((res) => {
 1. **无 TTL、无失效接口**：缓存写入后不会自动过期，也没有提供手动清空 `cacheMap` 的入口，仅在刷新页面（内存释放）后失效。给"页面生命周期内不变"的数据用没问题，给会变化的数据用会导致脏读。
 2. **缓存 key 包含请求数据**：同 URL 但 `data`/`params` 不同不会错误复用缓存；普通对象的字段顺序不影响 key，数组顺序仍然影响 key。
 3. **GET 与 POST 均可缓存**：两者都只通过 URL 中有值的 `needCache` 参数开启；配置对象中的同名字段不生效。
-4. **业务失败的等待队列未结算**：`code !== '200'` 时会删除 `statusMap` 并 resolve 首个请求，但不会调用或删除 `callbackMap`，并发跟随者会一直 pending，回调也会残留。
-5. **HTTP 异常路径存在作用域错误**：`.catch()` 内使用了只在 `.then()` 中声明的 `res`，会触发 `ReferenceError`。应直接按 URL 缓存开关清理状态，并使用 `response` reject 等待者。
-6. **`returnOriginData` 与业务码判断不兼容**：启用该配置后 `res` 是完整 Axios response，`res.code` 通常不存在，缓存请求会被当作业务失败处理。
-7. **仅字符串 `'200'` 被视为成功**：若后端返回数值 `200`，当前严格比较不会写入缓存或唤醒等待者。
-8. **存在未使用的开关函数**：源码仍保留 `isCacheEnabled(url, config)`，但请求流程没有调用它，所以该函数中对配置对象的兼容逻辑实际上不会生效。
+4. **业务失败的 Promise 语义不一致**：`code !== '200'` 时，首个真实请求会 `resolve(res)`，并发等待者却通过 `onError(res)` 被 reject。调用方是否进入 `.then` 或 `.catch` 取决于请求先后顺序，建议后续统一。
+5. **`returnOriginData` 与业务码判断不兼容**：启用该配置后 `res` 是完整 Axios response，`res.code` 通常不存在，缓存请求会被当作业务失败处理。
+6. **仅字符串 `'200'` 被视为成功**：若后端返回数值 `200`，当前严格比较不会写入缓存，等待者也会被 reject。
