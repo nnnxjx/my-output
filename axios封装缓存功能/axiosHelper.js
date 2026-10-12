@@ -102,7 +102,8 @@ define(['axios','qs'],function (axios,qs) {
                 api[method] =  (url, data, config = {})=> {
                     // method、URL 和稳定序列化后的 data 共同作为唯一 key。
                     const cacheKey = createCacheKey(method, url, data);
-                    if (getQueryString(url, 'needCache')) {
+                    const needCache = getQueryString(url, 'needCache');
+                    if (needCache) {
                         if (statusMap.has(cacheKey)) {
                             const currentStatus = statusMap.get(cacheKey)
 
@@ -143,30 +144,35 @@ define(['axios','qs'],function (axios,qs) {
                         }, config))
                         .then((response)=> {
                             let res = config && config.returnOriginData ? response : response.data
-                            if (res.code === "200"&&getQueryString(url, 'needCache')) {
+                            if (res.code === "200"&&needCache) {
                                 statusMap.set(cacheKey, 'complete')
                                 cacheMap.set(cacheKey, res)
-                            } else if(res.code!=='200'&&getQueryString(url, 'needCache')){
+                            } else if(res.code!=='200'&&needCache){
                                 // 不成功的情况下删掉 statusMap 中的状态，能让下次请求重新请求
                                 statusMap.delete(cacheKey)
                             }
                             // 这里触发resolve的回调函数
-                            if (res.code==='200'&&callbackMap.has(cacheKey)) {
+                            if (res.code==='200'&&needCache&&callbackMap.has(cacheKey)) {
                                 callbackMap.get(cacheKey).forEach((callback) => {
                                     callback.onSuccess(res)
                                 })
                                 // 调用完成之后清掉，用不到了
+                                callbackMap.delete(cacheKey)
+                            }else if(res.code!=='200'&&needCache&&callbackMap.has(cacheKey)) {
+                                callbackMap.get(cacheKey).forEach((callback) => {
+                                    callback.onError(res)
+                                })
                                 callbackMap.delete(cacheKey)
                             }
                             resolve(res);
                         })
                         .catch((response)=> {
                             // 不成功的情况下删掉 statusMap 中的状态，能让下次请求重新请求
-                            if (res.code!=='200'&&getQueryString(url, 'needCache')) {
+                            if (response.code!=='200'&&needCache) {
                                 statusMap.delete(cacheKey)
                             }
                             // 这里触发reject的回调函数
-                            if (res.code!=='200'&&getQueryString(url, 'needCache')&&callbackMap.has(cacheKey)) {
+                            if (response.code!=='200'&&needCache&&callbackMap.has(cacheKey)) {
                                 callbackMap.get(cacheKey).forEach((callback) => {
                                     callback.onError(response)
                                 })
