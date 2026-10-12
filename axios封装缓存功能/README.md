@@ -4,13 +4,18 @@
 
 ## 一、核心数据结构
 
-模块内部维护 3 个 `Map`（闭包内，页面生命周期内常驻）：
+模块内部维护 4 个 `Map`（闭包内常驻）和一个默认 TTL 常量：
 
 | Map | 作用 | Key | Value |
 | --- | --- | --- | --- |
 | `cacheMap` | 存储缓存数据（真正放结果的地方） | cacheKey | 接口响应体 `res` |
+| `cacheExpireMap` | 存储缓存的绝对过期时间 | cacheKey | `Date.now() + cacheTTL` |
 | `statusMap` | 存储缓存当前状态 | cacheKey | `'pending'`（请求中）/ `'complete'`（已完成） |
 | `callbackMap` | 存放等待状态（pending）的请求回调 | cacheKey | `[{onSuccess, onError}, ...]` 数组 |
+
+```js
+const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 默认 5 分钟
+```
 
 ### 缓存 Key（cacheKey）的生成规则
 
@@ -49,8 +54,9 @@ GET 和 POST 使用相同的触发方式：URL 上必须带有值的 `needCache`
         │                 │
         │                 └─ statusMap 中有该 key
         │                          │
-        │                          ├─ 状态 'complete' ─► 直接返回 Promise.resolve(cacheMap[key])
-        │                          │                     （不发 HTTP，同步走缓存）
+        │                          ├─ 状态 'complete'
+        │                          │        ├─ TTL 未过期 ─► 直接返回 Promise.resolve(cacheMap[key])
+        │                          │        └─ TTL 已过期 ─► 删除旧缓存和状态，重新发 HTTP
         │                          │
         │                          └─ 状态 'pending' ──► 不发 HTTP，把本次调用的
         │                                                {onSuccess: resolve, onError: reject}
@@ -61,14 +67,14 @@ GET 和 POST 使用相同的触发方式：URL 上必须带有值的 `needCache`
                  ├─ res.code === '200'（业务成功）
                  │        ├─ statusMap[key] = 'complete'
                  │        ├─ cacheMap[key] = res（写入缓存）
+                 │        ├─ cacheExpireMap[key] = 当前时间 + cacheTTL
                  │        ├─ 依次调用 callbackMap[key] 中所有 onSuccess(res)，随后 delete callbackMap[key]
                  │        └─ 本次调用自身 resolve(res)
                  │
                  ├─ 业务失败（HTTP 成功但 code 非 '200'）
                  │        ├─ statusMap.delete(key)
-                 │        ├─ 有等待者：执行所有 onError(res)，清理 callbackMap，
-                 │        │             首个调用者也 reject(res)
-                 │        └─ 无等待者：落到末尾 resolve(res)
+                 │        ├─ 有等待者时执行所有 onError(res)，随后清理 callbackMap
+                 │        └─ 首个调用者 reject(res)
                  │
                  └─ HTTP/Axios 异常（进入 catch）
                           ├─ statusMap.delete(key)
@@ -85,11 +91,18 @@ statusMap.set(cacheKey, 'pending');
 // 随后进入 new Promise(...) 真正调用 axiosIns 发起请求
 ```
 
-### 2. 缓存命中（complete）→ 直接返回缓存，不发请求
+### 2. 缓存命中（complete 且未过期）→ 直接返回缓存，不发请求
 
 ```js
 if (currentStatus === 'complete') {
-    return Promise.resolve(cacheMap.get(cacheKey));
+    const expiresAt = cacheExpireMap.get(cacheKey);
+    if (typeof expiresAt === 'number' && Date.now() < expiresAt) {
+        return Promise.resolve(cacheMap.get(cacheKey));
+    }
+
+    cacheMap.delete(cacheKey);
+    cacheExpireMap.delete(cacheKey);
+    statusMap.delete(cacheKey);
 }
 ```
 
@@ -117,16 +130,21 @@ if (currentStatus === 'pending') {
   [不存在] ──首次缓存请求──► 'pending' ──业务成功──► 'complete'
                                 │
                                 ├─业务失败──► statusMap.delete(key)
-                                │              ├─有等待者：reject 全部请求并清理 callbackMap
-                                │              └─无等待者：首个请求 resolve
+                                │              + reject 首个请求及全部等待者
+                                │              + 清理 callbackMap
                                 │
                                 └─HTTP 异常──► statusMap.delete(key)
                                                + reject 等待者并清理 callbackMap
+
+  'complete' ──TTL 未过期──► 返回 cacheMap
+       │
+       └─TTL 已过期──► 删除 cacheMap/cacheExpireMap/statusMap ──► 重新请求
 ```
 
 - `'pending'`：请求已发出但未返回，此期间新调用会被合并；
 - `'complete'`：结果已入 `cacheMap`，此后新调用直接读缓存；
-- 业务失败会删除状态且不写入缓存；存在并发等待者时，首个请求和所有等待者都会 reject；没有等待者时，首个请求会 resolve。
+- 读取 `'complete'` 状态时会检查 `cacheExpireMap`，只有当前时间早于过期时间才返回缓存；
+- 业务失败会删除状态且不写入缓存；首个请求和所有并发等待者都会 reject，等待队列随后被清理。
 - HTTP/Axios 异常会删除状态、reject 等待者并清理 `callbackMap`，下次调用可以重新发起请求。
 
 ## 五、使用方式
@@ -146,12 +164,16 @@ api.get('/api/dict/list.do?needCache=1').then((res) => {
 api.post('/api/dict/search.do?needCache=1', {
     type: 'facility',
     areaId: 100
+}, {
+    cacheTTL: 60 * 1000 // 可选：缓存 1 分钟，单位为毫秒
 });
 
 // 字段顺序不同仍会命中同一份缓存，不会再次发送 HTTP 请求
 api.post('/api/dict/search.do?needCache=1', {
     areaId: 100,
     type: 'facility'
+}, {
+    cacheTTL: 60 * 1000
 });
 
 // 4. 不需要缓存的请求：什么都不用改
@@ -224,11 +246,11 @@ Promise.all([p1, p2, p3]).then(([r1, r2, r3]) => {
 
 ### 场景 4：实时监测、告警、图表数据（❌ 不要加 needCache）
 
-这类数据会持续变化，而本缓存在页面生命周期内**永不过期、无手动清空入口**，一旦缓存就永远是首次请求的旧数据：
+这类数据会持续变化。虽然缓存现在默认 5 分钟后过期，但 TTL 内仍可能返回旧数据，因此通常不应开启缓存：
 
 ```js
 // ❌ 错误示例：监测数据/告警列表绝不能加 needCache
-api.get('/api/monitor/realtimeList.do?needCache=1'); // 之后刷新永远读到首次的旧数据
+api.get('/api/monitor/realtimeList.do?needCache=1'); // TTL 内会持续读缓存，不适合实时数据
 
 // ✅ 正确做法：不带 needCache，每次都真实请求
 api.get('/api/monitor/realtimeList.do').then((res) => {
@@ -240,9 +262,11 @@ api.get('/api/monitor/realtimeList.do').then((res) => {
 
 ## 七、注意事项 / 已知限制
 
-1. **无 TTL、无失效接口**：缓存写入后不会自动过期，也没有提供手动清空 `cacheMap` 的入口，仅在刷新页面（内存释放）后失效。给"页面生命周期内不变"的数据用没问题，给会变化的数据用会导致脏读。
+1. **TTL 默认 5 分钟**：可通过第三个参数 `{ cacheTTL: 毫秒数 }` 覆盖；非法值或负数使用默认值，`0` 表示写入后立即过期。`cacheTTL` 只控制本地缓存，不会传给 Axios。
 2. **缓存 key 包含请求数据**：同 URL 但 `data`/`params` 不同不会错误复用缓存；普通对象的字段顺序不影响 key，数组顺序仍然影响 key。
 3. **GET 与 POST 均可缓存**：两者都只通过 URL 中有值的 `needCache` 参数开启；配置对象中的同名字段不生效。
-4. **业务失败的 Promise 语义取决于是否发生请求合并**：`code !== '200'` 且 `callbackMap` 中有等待者时，等待者与首个请求全部 reject；没有等待者时，首个请求落到末尾并 resolve。相同接口的失败结果可能因并发情况不同而进入 `.then` 或 `.catch`，建议后续统一。
-5. **`returnOriginData` 与业务码判断不兼容**：启用该配置后 `res` 是完整 Axios response，`res.code` 通常不存在，缓存请求会被当作业务失败处理。
-6. **仅字符串 `'200'` 被视为成功**：若后端返回数值 `200`，当前严格比较不会写入缓存，等待者也会被 reject。
+4. **业务失败统一 reject**：无论是否开启缓存、是否存在并发等待者，只要 `res.code !== '200'`，本次请求都会 reject；缓存请求还会删除状态并清理等待队列。
+5. **`returnOriginData` 与业务码判断不兼容**：启用该配置后 `res` 是完整 Axios response，`res.code` 通常不存在，请求会被当作业务失败并 reject。
+6. **仅字符串 `'200'` 被视为成功**：若后端返回数值 `200`，当前严格比较会将其作为业务失败并 reject，也不会写入缓存。
+7. **TTL 由首个真实请求决定**：同一 key 的并发等待者不会真正发起请求，因此它们传入的不同 `cacheTTL` 不会覆盖首个请求的设置。
+8. **尚无主动失效和容量限制**：TTL 可以控制时间过期，但写操作后无法按 key 主动清除关联缓存，也没有 LRU/容量上限。

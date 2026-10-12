@@ -4,10 +4,14 @@ define(['axios','qs'],function (axios,qs) {
     window.qs = qs;
     // 存储缓存数据
     const cacheMap = new Map();
+    // 存储缓存过期时间戳
+    const cacheExpireMap = new Map();
     // 存储缓存当前状态 'pending' || 'complete'
     const statusMap = new Map();
     // 存放等待状态的请求回调
     const callbackMap = new Map();
+    // 默认缓存 5 分钟，可通过请求配置 cacheTTL（毫秒）覆盖
+    const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
 
     // 对对象的 key 递归排序，保证字段顺序不同但内容相同的数据生成相同字符串。
     // 数组顺序会保留，因为数组顺序通常代表业务含义。
@@ -48,6 +52,17 @@ define(['axios','qs'],function (axios,qs) {
 
     function createCacheKey(method, url, data) {
         return method + ':' + normalizeUrl(url) + ':' + stableStringify(data);
+    }
+
+    function getCacheTTL(config) {
+        const rawCacheTTL = config && config.cacheTTL;
+        if (rawCacheTTL === undefined || rawCacheTTL === null || rawCacheTTL === '') {
+            return DEFAULT_CACHE_TTL;
+        }
+        const cacheTTL = Number(rawCacheTTL);
+        return Number.isFinite(cacheTTL) && cacheTTL >= 0
+            ? cacheTTL
+            : DEFAULT_CACHE_TTL;
     }
 
     function getQueryString(url,param) {
@@ -109,7 +124,15 @@ define(['axios','qs'],function (axios,qs) {
 
                             // 判断当前的接口缓存状态，如果是 complete ，则代表缓存完成
                             if (currentStatus === 'complete') {
-                                return Promise.resolve(cacheMap.get(cacheKey))
+                                const expiresAt = cacheExpireMap.get(cacheKey)
+                                if (typeof expiresAt === 'number' && Date.now() < expiresAt) {
+                                    return Promise.resolve(cacheMap.get(cacheKey))
+                                }
+
+                                // 缓存已过期，清理旧数据并重新发起请求
+                                cacheMap.delete(cacheKey)
+                                cacheExpireMap.delete(cacheKey)
+                                statusMap.delete(cacheKey)
                             }
 
                             // 如果是 pending ，则代表正在请求中，这里放入回调函数
@@ -136,20 +159,25 @@ define(['axios','qs'],function (axios,qs) {
                     }
 
                     return new Promise(function (resolve, reject) {
-
+                        const requestConfig = Object.assign({}, config)
+                        // cacheTTL 只控制本地缓存，不传给 axios
+                        delete requestConfig.cacheTTL
                         axiosIns(Object.assign({
                             method: method,
                             url: url,
                             [method === 'get' ? 'params' : 'data']: data
-                        }, config))
+                        }, requestConfig))
                         .then((response)=> {
                             let res = config && config.returnOriginData ? response : response.data
                             if (res.code === "200"&&needCache) {
                                 statusMap.set(cacheKey, 'complete')
                                 cacheMap.set(cacheKey, res)
+                                cacheExpireMap.set(cacheKey, Date.now() + getCacheTTL(config))
                             } else if(res.code!=='200'&&needCache){
                                 // 不成功的情况下删掉 statusMap 中的状态，能让下次请求重新请求
                                 statusMap.delete(cacheKey)
+                                cacheMap.delete(cacheKey)
+                                cacheExpireMap.delete(cacheKey)
                             }
                             // 这里触发resolve的回调函数
                             if (res.code==='200'&&needCache&&callbackMap.has(cacheKey)) {
@@ -178,6 +206,8 @@ define(['axios','qs'],function (axios,qs) {
                             // 不成功的情况下删掉 statusMap 中的状态，能让下次请求重新请求
                             if (response.code!=='200'&&needCache) {
                                 statusMap.delete(cacheKey)
+                                cacheMap.delete(cacheKey)
+                                cacheExpireMap.delete(cacheKey)
                             }
                             // 这里触发reject的回调函数
                             if (response.code!=='200'&&needCache&&callbackMap.has(cacheKey)) {
