@@ -66,8 +66,9 @@ GET 和 POST 使用相同的触发方式：URL 上必须带有值的 `needCache`
                  │
                  ├─ 业务失败（HTTP 成功但 code 非 '200'）
                  │        ├─ statusMap.delete(key)
-                 │        ├─ 等待者执行 onError(res)，随后 delete callbackMap[key]
-                 │        └─ 首个调用者仍执行 resolve(res)
+                 │        ├─ 有等待者：执行所有 onError(res)，清理 callbackMap，
+                 │        │             首个调用者也 reject(res)
+                 │        └─ 无等待者：落到末尾 resolve(res)
                  │
                  └─ HTTP/Axios 异常（进入 catch）
                           ├─ statusMap.delete(key)
@@ -116,7 +117,8 @@ if (currentStatus === 'pending') {
   [不存在] ──首次缓存请求──► 'pending' ──业务成功──► 'complete'
                                 │
                                 ├─业务失败──► statusMap.delete(key)
-                                │              + reject 等待者并清理 callbackMap
+                                │              ├─有等待者：reject 全部请求并清理 callbackMap
+                                │              └─无等待者：首个请求 resolve
                                 │
                                 └─HTTP 异常──► statusMap.delete(key)
                                                + reject 等待者并清理 callbackMap
@@ -124,7 +126,7 @@ if (currentStatus === 'pending') {
 
 - `'pending'`：请求已发出但未返回，此期间新调用会被合并；
 - `'complete'`：结果已入 `cacheMap`，此后新调用直接读缓存；
-- 业务失败会删除状态、不写入缓存，并 reject 所有并发等待者；但首个请求仍然 resolve，调用语义并不完全一致。
+- 业务失败会删除状态且不写入缓存；存在并发等待者时，首个请求和所有等待者都会 reject；没有等待者时，首个请求会 resolve。
 - HTTP/Axios 异常会删除状态、reject 等待者并清理 `callbackMap`，下次调用可以重新发起请求。
 
 ## 五、使用方式
@@ -241,6 +243,6 @@ api.get('/api/monitor/realtimeList.do').then((res) => {
 1. **无 TTL、无失效接口**：缓存写入后不会自动过期，也没有提供手动清空 `cacheMap` 的入口，仅在刷新页面（内存释放）后失效。给"页面生命周期内不变"的数据用没问题，给会变化的数据用会导致脏读。
 2. **缓存 key 包含请求数据**：同 URL 但 `data`/`params` 不同不会错误复用缓存；普通对象的字段顺序不影响 key，数组顺序仍然影响 key。
 3. **GET 与 POST 均可缓存**：两者都只通过 URL 中有值的 `needCache` 参数开启；配置对象中的同名字段不生效。
-4. **业务失败的 Promise 语义不一致**：`code !== '200'` 时，首个真实请求会 `resolve(res)`，并发等待者却通过 `onError(res)` 被 reject。调用方是否进入 `.then` 或 `.catch` 取决于请求先后顺序，建议后续统一。
+4. **业务失败的 Promise 语义取决于是否发生请求合并**：`code !== '200'` 且 `callbackMap` 中有等待者时，等待者与首个请求全部 reject；没有等待者时，首个请求落到末尾并 resolve。相同接口的失败结果可能因并发情况不同而进入 `.then` 或 `.catch`，建议后续统一。
 5. **`returnOriginData` 与业务码判断不兼容**：启用该配置后 `res` 是完整 Axios response，`res.code` 通常不存在，缓存请求会被当作业务失败处理。
 6. **仅字符串 `'200'` 被视为成功**：若后端返回数值 `200`，当前严格比较不会写入缓存，等待者也会被 reject。
